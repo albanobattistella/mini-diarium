@@ -11,12 +11,14 @@ import {
   saveEntry,
   getEntriesForDate,
   deleteEntryIfEmpty,
+  deleteEntry,
   getAllEntryDates,
 } from '../../lib/tauri';
 import type { DiaryEntry } from '../../lib/tauri';
 import { debounce } from '../../lib/debounce';
-import { isSaving, setIsSaving, setEntryDates } from '../../state/entries';
+import { isSaving, setIsSaving, setEntryDates, registerCleanupCallback } from '../../state/entries';
 import { preferences } from '../../state/preferences';
+import { confirm } from '@tauri-apps/plugin-dialog';
 
 const log = createLogger('Editor');
 
@@ -24,7 +26,7 @@ export default function EditorPanel() {
   const [title, setTitle] = createSignal('');
   const [content, setContent] = createSignal('');
   const [wordCount, setWordCount] = createSignal(0);
-  const [isLoadingEntry, setIsLoadingEntry] = createSignal(false);
+  const [_isLoadingEntry, setIsLoadingEntry] = createSignal(false);
   const [editorInstance, setEditorInstance] = createSignal<Editor | null>(null);
 
   // Multi-entry state
@@ -35,7 +37,14 @@ export default function EditorPanel() {
   let isDisposed = false;
   let loadRequestId = 0;
   let saveRequestId = 0;
-  let isCreatingEntry = false; // prevents concurrent createEntry calls
+  const [isCreatingEntry, setIsCreatingEntry] = createSignal(false);
+
+  // Backend returns entries newest-first; reverse so index 0 = oldest and index N-1 = newest.
+  // This makes the counter read "1/N … N/N" in chronological order and puts new entries last.
+  const fetchEntriesOrdered = async (date: string): Promise<DiaryEntry[]> => {
+    const entries = await getEntriesForDate(date);
+    return entries.slice().reverse();
+  };
 
   const isContentEmpty = () => {
     const editor = editorInstance();
@@ -100,14 +109,15 @@ export default function EditorPanel() {
     setIsLoadingEntry(true);
 
     try {
-      const entries = await getEntriesForDate(date);
+      const entries = await fetchEntriesOrdered(date);
       if (isDisposed || requestId !== loadRequestId) return;
 
       setDayEntries(entries);
 
       if (entries.length > 0) {
-        setCurrentIndex(0);
-        const entry = entries[0];
+        const startIndex = entries.length - 1; // newest entry is last in chronological order
+        setCurrentIndex(startIndex);
+        const entry = entries[startIndex];
         setPendingEntryId(entry.id);
         setTitle(entry.title);
         setContent(entry.text);
@@ -143,7 +153,7 @@ export default function EditorPanel() {
 
     // Refresh entries list from backend
     try {
-      const refreshed = await getEntriesForDate(selectedDate());
+      const refreshed = await fetchEntriesOrdered(selectedDate());
       if (isDisposed) return;
       setDayEntries(refreshed);
 
@@ -172,19 +182,26 @@ export default function EditorPanel() {
 
   // Add a new entry for the current date
   const addEntry = async () => {
-    // Save current first
-    const currentId = pendingEntryId();
-    if (currentId !== null) {
-      debouncedSave.cancel();
-      await saveCurrentById(currentId, title(), content());
-    }
+    if (isCreatingEntry()) return;
+    // Only allow adding a second entry when the current one has real content.
+    // An empty pendingEntryId means no entry yet (typing auto-creates the first one).
+    // An empty title+body means the entry hasn't been filled in yet.
+    if (pendingEntryId() === null || isContentEmpty()) return;
+    setIsCreatingEntry(true);
 
     try {
+      // Save current first
+      const currentId = pendingEntryId();
+      if (currentId !== null) {
+        debouncedSave.cancel();
+        await saveCurrentById(currentId, title(), content());
+      }
+
       const newEntry = await createEntry(selectedDate());
       if (isDisposed) return;
 
       // Refresh entries for the date
-      const refreshed = await getEntriesForDate(selectedDate());
+      const refreshed = await fetchEntriesOrdered(selectedDate());
       if (isDisposed) return;
 
       setDayEntries(refreshed);
@@ -196,12 +213,18 @@ export default function EditorPanel() {
       setTitle('');
       setContent('');
       setWordCount(0);
+      // setContent('') causes TipTap to fire onUpdate synchronously, which schedules
+      // a debounced save with empty content on the new entry ID — cancelling here
+      // prevents that save from running and immediately deleting the new blank entry.
+      debouncedSave.cancel();
 
       // Refresh dates
       const dates = await getAllEntryDates();
       if (!isDisposed) setEntryDates(dates);
     } catch (error) {
       log.error('Failed to add entry:', error);
+    } finally {
+      setIsCreatingEntry(false);
     }
   };
 
@@ -220,25 +243,69 @@ export default function EditorPanel() {
       const isEmpty = editor
         ? editor.isEmpty || editor.getText().trim() === ''
         : newContent.trim() === '';
-      if (isEmpty || isCreatingEntry) return;
+      if (isEmpty || isCreatingEntry()) return;
 
       // First real keystroke on empty day — create entry then save
-      isCreatingEntry = true;
+      setIsCreatingEntry(true);
       void (async () => {
         try {
           const newEntry = await createEntry(selectedDate());
           if (isDisposed) return;
           setPendingEntryId(newEntry.id);
-          const refreshed = await getEntriesForDate(selectedDate());
+          const refreshed = await fetchEntriesOrdered(selectedDate());
           if (!isDisposed) setDayEntries(refreshed);
           // Use current signal values — user may have typed more while awaiting
           debouncedSave(newEntry.id, title(), content());
         } catch (error) {
           log.error('Failed to create entry on first keystroke:', error);
         } finally {
-          isCreatingEntry = false;
+          setIsCreatingEntry(false);
         }
       })();
+    }
+  };
+
+  const handleDeleteEntry = async () => {
+    if (dayEntries().length <= 1) return;
+
+    const confirmed = await confirm('Are you sure you want to delete this entry?', {
+      title: 'Delete Entry',
+      kind: 'warning',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const entryToDelete = dayEntries()[currentIndex()];
+      if (!entryToDelete?.id) return;
+
+      await deleteEntry(entryToDelete.id);
+
+      const refreshed = await fetchEntriesOrdered(selectedDate());
+
+      if (refreshed.length === 0) {
+        setPendingEntryId(null);
+        setTitle('');
+        setContent('');
+        setWordCount(0);
+        setDayEntries([]);
+        setCurrentIndex(0);
+      } else {
+        let newIndex = currentIndex();
+        if (newIndex >= refreshed.length) {
+          newIndex = refreshed.length - 1;
+        }
+        const entry = refreshed[newIndex];
+        setPendingEntryId(entry.id);
+        setTitle(entry.title);
+        setContent(entry.text);
+        const words = entry.text.trim().split(/\s+/).filter(Boolean);
+        setWordCount(words.length);
+        setDayEntries(refreshed);
+        setCurrentIndex(newIndex);
+      }
+    } catch (error) {
+      log.error('Failed to delete entry:', error);
     }
   };
 
@@ -249,22 +316,22 @@ export default function EditorPanel() {
       debouncedSave(id, newTitle, content());
     } else {
       // Skip creation on empty title (e.g. programmatic clear)
-      if (newTitle.trim() === '' || isCreatingEntry) return;
+      if (newTitle.trim() === '' || isCreatingEntry()) return;
 
       // First real title keystroke on empty day — create entry then save
-      isCreatingEntry = true;
+      setIsCreatingEntry(true);
       void (async () => {
         try {
           const newEntry = await createEntry(selectedDate());
           if (isDisposed) return;
           setPendingEntryId(newEntry.id);
-          const refreshed = await getEntriesForDate(selectedDate());
+          const refreshed = await fetchEntriesOrdered(selectedDate());
           if (!isDisposed) setDayEntries(refreshed);
           debouncedSave(newEntry.id, title(), content());
         } catch (error) {
           log.error('Failed to create entry on title keystroke:', error);
         } finally {
-          isCreatingEntry = false;
+          setIsCreatingEntry(false);
         }
       })();
     }
@@ -288,12 +355,20 @@ export default function EditorPanel() {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    const unregister = registerCleanupCallback(async () => {
+      const currentId = pendingEntryId();
+      if (currentId !== null) {
+        await saveCurrentById(currentId, title(), content());
+      }
+    });
+
     onCleanup(() => {
       isDisposed = true;
       loadRequestId += 1;
       saveRequestId += 1;
       debouncedSave.cancel();
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      unregister();
     });
   });
 
@@ -305,6 +380,17 @@ export default function EditorPanel() {
         onPrev={() => void navigateToEntry(currentIndex() - 1)}
         onNext={() => void navigateToEntry(currentIndex() + 1)}
         onAdd={() => void addEntry()}
+        addDisabled={isCreatingEntry() || pendingEntryId() === null || isContentEmpty()}
+        addTitle={
+          isCreatingEntry()
+            ? 'Creating entry…'
+            : pendingEntryId() === null || isContentEmpty()
+              ? 'Write something first to add another entry for this day'
+              : 'Add another entry for this day'
+        }
+        onDelete={handleDeleteEntry}
+        deleteDisabled={isCreatingEntry() || dayEntries().length <= 1}
+        deleteTitle="Delete entry"
       />
       <div class="flex-1 overflow-y-auto p-6">
         <div class="mx-auto w-full max-w-3xl xl:max-w-5xl 2xl:max-w-6xl">
@@ -314,14 +400,14 @@ export default function EditorPanel() {
                 value={title()}
                 onInput={handleTitleInput}
                 onEnter={handleTitleEnter}
-                placeholder={isLoadingEntry() ? 'Loading...' : 'Title (optional)'}
+                placeholder="Title (optional)"
                 spellCheck={preferences().enableSpellcheck}
               />
             </Show>
             <DiaryEditor
               content={content()}
               onUpdate={handleContentUpdate}
-              placeholder={isLoadingEntry() ? 'Loading...' : "What's on your mind today?"}
+              placeholder="What's on your mind today?"
               onEditorReady={setEditorInstance}
               spellCheck={preferences().enableSpellcheck}
             />

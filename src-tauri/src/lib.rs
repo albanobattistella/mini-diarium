@@ -139,6 +139,12 @@ pub fn run() {
                 warn!("Screen-lock listener initialization failed: {}", error);
             }
 
+            // Show the window after setup is complete (window-state plugin has restored
+            // position by now), avoiding a flash at the default position on startup.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -174,6 +180,7 @@ pub fn run() {
             commands::entries::save_entry,
             commands::entries::get_entries_for_date,
             commands::entries::delete_entry_if_empty,
+            commands::entries::delete_entry,
             commands::entries::get_all_entry_dates,
             // Search
             commands::search::search_entries,
@@ -200,6 +207,8 @@ pub fn run() {
             commands::plugin::list_export_plugins,
             commands::plugin::run_import_plugin,
             commands::plugin::run_export_plugin,
+            // Debug
+            commands::debug::generate_debug_dump,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

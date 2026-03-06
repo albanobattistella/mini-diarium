@@ -13,7 +13,7 @@ pub fn verify_password(password: String, state: State<DiaryState>) -> Result<(),
         .db
         .lock()
         .map_err(|_| "State lock poisoned".to_string())?;
-    let db = db_state.as_ref().ok_or("Diary must be unlocked")?;
+    let db = db_state.as_ref().ok_or("Journal must be unlocked")?;
 
     let (_, wrapped_key) =
         crate::db::queries::get_password_slot(db)?.ok_or("No password auth method found")?;
@@ -34,7 +34,7 @@ pub fn list_auth_methods(
         .db
         .lock()
         .map_err(|_| "State lock poisoned".to_string())?;
-    let db = db_state.as_ref().ok_or("Diary must be unlocked")?;
+    let db = db_state.as_ref().ok_or("Journal must be unlocked")?;
     crate::db::queries::list_auth_slots(db)
 }
 
@@ -82,15 +82,15 @@ pub fn write_key_file(path: String, private_key_hex: String) -> Result<(), Strin
 /// No existing password is required: being unlocked is the authentication.
 #[tauri::command]
 pub fn register_password(new_password: String, state: State<DiaryState>) -> Result<(), String> {
-    if new_password.len() < 8 {
-        return Err("Password must be at least 8 characters".to_string());
+    if new_password.is_empty() {
+        return Err("Password cannot be empty".to_string());
     }
 
     let db_state = state
         .db
         .lock()
         .map_err(|_| "State lock poisoned".to_string())?;
-    let db = db_state.as_ref().ok_or("Diary must be unlocked")?;
+    let db = db_state.as_ref().ok_or("Journal must be unlocked")?;
 
     // Reject if a password slot already exists
     if crate::db::queries::get_password_slot(db)?.is_some() {
@@ -127,7 +127,7 @@ pub fn register_keypair(
         .db
         .lock()
         .map_err(|_| "State lock poisoned".to_string())?;
-    let db = db_state.as_ref().ok_or("Diary must be unlocked")?;
+    let db = db_state.as_ref().ok_or("Journal must be unlocked")?;
 
     // Verify identity via password and recover master_key
     let (_, wrapped_key) =
@@ -197,7 +197,7 @@ pub fn remove_auth_method(
         .db
         .lock()
         .map_err(|_| "State lock poisoned".to_string())?;
-    let db = db_state.as_ref().ok_or("Diary must be unlocked")?;
+    let db = db_state.as_ref().ok_or("Journal must be unlocked")?;
 
     // Verify identity
     let (_, wrapped_key) =
@@ -468,15 +468,24 @@ mod tests {
     }
 
     #[test]
-    fn test_register_password_rejects_short_password() {
-        // Minimum length check (< 8 chars)
-        let short = "short";
-        let result: Result<(), String> = if short.len() < 8 {
-            Err("Password must be at least 8 characters".to_string())
+    fn test_register_password_rejects_empty_password() {
+        // Empty password check
+        let empty = "";
+        let result: Result<(), String> = if empty.is_empty() {
+            Err("Password cannot be empty".to_string())
         } else {
             Ok(())
         };
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("at least 8 characters"));
+        assert!(result.unwrap_err().contains("cannot be empty"));
+
+        // 1-character password should be accepted (even if very weak)
+        let short = "a";
+        let result: Result<(), String> = if short.is_empty() {
+            Err("Password cannot be empty".to_string())
+        } else {
+            Ok(())
+        };
+        assert!(result.is_ok(), "1-char password should be accepted");
     }
 }

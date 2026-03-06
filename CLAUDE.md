@@ -224,22 +224,22 @@ All 45 registered Tauri commands (source: `lib.rs`). Rust names use `snake_case`
 
 | Module | Rust Command | Frontend Wrapper | Description |
 |--------|-------------|-----------------|-------------|
-| auth | `create_diary` | `createDiary(password)` | Create new encrypted DB |
-| auth | `unlock_diary` | `unlockDiary(password)` | Decrypt and open DB |
-| auth | `lock_diary` | `lockDiary()` | Close DB connection |
-| auth | `diary_exists` | `diaryExists()` | Check if DB file exists |
-| auth | `check_diary_path` | `checkDiaryPath(dir)` | Stateless check: true if `{dir}/diary.db` exists |
-| auth | `is_diary_unlocked` | `isDiaryUnlocked()` | Check unlock state |
-| auth | `get_diary_path` | `getDiaryPath()` | Return diary file path |
-| auth | `change_diary_directory` | `changeDiaryDirectory(newDir)` | Change diary directory (locked state only) |
+| auth | `create_diary` | `createJournal(password)` | Create new encrypted DB |
+| auth | `unlock_diary` | `unlockJournal(password)` | Decrypt and open DB |
+| auth | `lock_diary` | `lockJournal()` | Close DB connection |
+| auth | `diary_exists` | `journalExists()` | Check if DB file exists |
+| auth | `check_diary_path` | `checkJournalPath(dir)` | Stateless check: true if `{dir}/diary.db` exists |
+| auth | `is_diary_unlocked` | `isJournalUnlocked()` | Check unlock state |
+| auth | `get_diary_path` | `getJournalPath()` | Return journal file path |
+| auth | `change_diary_directory` | `changeJournalDirectory(newDir)` | Change journal directory (locked state only) |
 | auth | `change_password` | `changePassword(old, new)` | Re-encrypt with new password |
-| auth | `reset_diary` | `resetDiary()` | Delete and recreate DB |
+| auth | `reset_diary` | `resetJournal()` | Delete and recreate DB |
 | auth | `verify_password` | `verifyPassword(password)` | Validate password without side effects |
-| auth | `unlock_diary_with_keypair` | `unlockDiaryWithKeypair(keyPath)` | Open DB via private key file |
+| auth | `unlock_diary_with_keypair` | `unlockJournalWithKeypair(keyPath)` | Open DB via private key file |
 | auth | `list_auth_methods` | `listAuthMethods()` | List all registered auth slots |
 | auth | `generate_keypair` | `generateKeypair()` | Generate X25519 keypair, return hex |
 | auth | `write_key_file` | `writeKeyFile(path, privateKeyHex)` | Write private key hex to file |
-| auth | `register_password` | `registerPassword(newPassword)` | Register a password auth slot (requires diary unlocked) |
+| auth | `register_password` | `registerPassword(newPassword)` | Register a password auth slot (requires journal unlocked) |
 | auth | `register_keypair` | `registerKeypair(currentPassword, publicKeyHex, label)` | Add keypair auth slot |
 | auth | `remove_auth_method` | `removeAuthMethod(slotId, currentPassword)` | Remove auth slot (guards last) |
 | auth | `list_journals` | `listJournals()` | List configured journals from config.json |
@@ -270,6 +270,7 @@ All 45 registered Tauri commands (source: `lib.rs`). Rust names use `snake_case`
 | plugin | `list_export_plugins` | `listExportPlugins()` | List all export plugins (built-in + Rhai) |
 | plugin | `run_import_plugin` | `runImportPlugin(pluginId, filePath)` | Run import via plugin registry |
 | plugin | `run_export_plugin` | `runExportPlugin(pluginId, filePath)` | Run export via plugin registry |
+| debug | `generate_debug_dump` | `generateDebugDump(filePath, preferencesJson)` | Write privacy-safe diagnostic JSON to file |
 
 ## State Management
 
@@ -277,14 +278,14 @@ Six signal-based state modules in `src/state/`:
 
 | Module | Signals | Key Functions |
 |--------|---------|---------------|
-| `auth.ts` | `authState: AuthState`, `error`, `authMethods: AuthMethodInfo[]` | `initializeAuth()`, `createDiary()`, `unlockDiary()`, `lockDiary()`, `unlockWithKeypair()`, `goToJournalPicker()` |
+| `auth.ts` | `authState: AuthState`, `error`, `authMethods: AuthMethodInfo[]` | `initializeAuth()`, `createJournal()`, `unlockJournal()`, `lockJournal()`, `unlockWithKeypair()`, `goToJournalPicker()` |
 | `entries.ts` | `currentEntry`, `entryDates`, `isLoading`, `isSaving` | Setters exported directly |
 | `journals.ts` | `journals: JournalConfig[]`, `activeJournalId`, `isSwitching` | `loadJournals()`, `switchJournal()`, `addJournal()`, `removeJournal()`, `renameJournal()` |
 | `search.ts` | `searchQuery`, `searchResults`, `isSearching` | Setters exported directly |
 | `ui.ts` | `selectedDate`, `isSidebarCollapsed`, `isGoToDateOpen`, `isPreferencesOpen`, `isStatsOpen`, `isImportOpen`, `isExportOpen`, `isAboutOpen` | Setters exported directly; `resetUiState()` resets all |
 | `preferences.ts` | `preferences: Preferences` | `setPreferences(Partial<Preferences>)`, `resetPreferences()` |
 
-`Preferences` fields: `allowFutureEntries` (bool), `firstDayOfWeek` (number|null), `hideTitles` (bool), `enableSpellcheck` (bool). Stored in `localStorage`.
+`Preferences` fields: `allowFutureEntries` (bool), `firstDayOfWeek` (number|null), `hideTitles` (bool), `enableSpellcheck` (bool), `escAction` (`'none'|'lock'|'quit'`), `autoLockEnabled` (bool), `autoLockTimeout` (number, seconds), `advancedToolbar` (bool), `editorFontSize` (number, px). Stored in `localStorage`.
 
 ## Conventions
 
@@ -365,7 +366,7 @@ All menu event names are prefixed `menu-`. See `menu.rs:78-107` for the full lis
 
 ## Testing
 
-### Backend: 229 tests across 28 modules
+### Backend: 233 tests across 29 modules
 
 Run: `cd src-tauri && cargo test`
 
@@ -388,6 +389,7 @@ Run: `cd src-tauri && cargo test`
 | import-cmd | 3 | `commands/import.rs` |
 | export-cmd | 2 | `commands/export.rs` |
 | plugin-cmd | 4 | `commands/plugin.rs` |
+| debug-cmd | 4 | `commands/debug.rs` |
 | minidiary | 8 | `import/minidiary.rs` |
 | dayone | 14 | `import/dayone.rs` |
 | dayone_txt | 16 | `import/dayone_txt.rs` |
@@ -433,11 +435,11 @@ Run: `bun run test:e2e` (requires release binary + `tauri-driver` installed)
 |-----------|---------|-------------|
 | `PasswordCreation.tsx` | Password input | `password-create-input` |
 | `PasswordCreation.tsx` | Confirm password input | `password-repeat-input` |
-| `PasswordCreation.tsx` | Create button | `create-diary-button` |
+| `PasswordCreation.tsx` | Create button | `create-journal-button` |
 | `PasswordPrompt.tsx` | Password input | `password-unlock-input` |
-| `PasswordPrompt.tsx` | Unlock submit button | `unlock-diary-button` |
+| `PasswordPrompt.tsx` | Unlock submit button | `unlock-journal-button` |
 | `Header.tsx` | Sidebar toggle (hamburger) | `toggle-sidebar-button` |
-| `Header.tsx` | Lock button | `lock-diary-button` |
+| `Header.tsx` | Lock button | `lock-journal-button` |
 | `TitleEditor.tsx` | Title input | `title-input` |
 | `Calendar.tsx` | Each day button | `calendar-day-YYYY-MM-DD` |
 

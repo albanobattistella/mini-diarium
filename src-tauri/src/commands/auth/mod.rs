@@ -26,7 +26,7 @@ impl DiaryState {
 }
 
 #[derive(Clone, serde::Serialize)]
-struct DiaryLockedEventPayload {
+struct JournalLockedEventPayload {
     reason: String,
 }
 
@@ -34,7 +34,7 @@ fn lock_diary_inner(state: &DiaryState) -> Result<bool, String> {
     let mut db_state = state
         .db
         .lock()
-        .map_err(|_| "Failed to access diary state".to_string())?;
+        .map_err(|_| "Failed to access journal state".to_string())?;
 
     if db_state.is_none() {
         return Ok(false);
@@ -44,14 +44,20 @@ fn lock_diary_inner(state: &DiaryState) -> Result<bool, String> {
     Ok(true)
 }
 
+fn emit_diary_locking(app: &AppHandle<Wry>, reason: &str) {
+    if let Err(error) = app.emit("journal-locking", reason) {
+        warn!("Failed to emit journal-locking event: {}", error);
+    }
+}
+
 fn emit_diary_locked(app: &AppHandle<Wry>, reason: &str) {
     if let Err(error) = app.emit(
-        "diary-locked",
-        DiaryLockedEventPayload {
+        "journal-locked",
+        JournalLockedEventPayload {
             reason: reason.to_string(),
         },
     ) {
-        warn!("Failed to emit diary-locked event: {}", error);
+        warn!("Failed to emit journal-locked event: {}", error);
     }
 }
 
@@ -60,10 +66,11 @@ pub(crate) fn auto_lock_diary_if_unlocked(
     app: AppHandle<Wry>,
     reason: &str,
 ) -> Result<bool, String> {
+    emit_diary_locking(&app, reason);
     let did_lock = lock_diary_inner(&state)?;
 
     if did_lock {
-        info!("Diary auto-locked ({})", reason);
+        info!("Journal auto-locked ({})", reason);
         crate::menu::update_menu_lock_state(&app, true);
         emit_diary_locked(&app, reason);
     }

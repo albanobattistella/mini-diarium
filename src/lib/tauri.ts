@@ -1,35 +1,35 @@
 import { invoke } from '@tauri-apps/api/core';
 
 // Authentication commands
-export async function createDiary(password: string): Promise<void> {
+export async function createJournal(password: string): Promise<void> {
   await invoke('create_diary', { password });
 }
 
-export async function unlockDiary(password: string): Promise<void> {
+export async function unlockJournal(password: string): Promise<void> {
   await invoke('unlock_diary', { password });
 }
 
-export async function lockDiary(): Promise<void> {
+export async function lockJournal(): Promise<void> {
   await invoke('lock_diary');
 }
 
-export async function diaryExists(): Promise<boolean> {
+export async function journalExists(): Promise<boolean> {
   return await invoke('diary_exists');
 }
 
-export async function checkDiaryPath(dir: string): Promise<boolean> {
+export async function checkJournalPath(dir: string): Promise<boolean> {
   return invoke<boolean>('check_diary_path', { dir });
 }
 
-export async function isDiaryUnlocked(): Promise<boolean> {
+export async function isJournalUnlocked(): Promise<boolean> {
   return await invoke('is_diary_unlocked');
 }
 
-export async function getDiaryPath(): Promise<string> {
+export async function getJournalPath(): Promise<string> {
   return await invoke('get_diary_path');
 }
 
-export async function changeDiaryDirectory(newDir: string): Promise<void> {
+export async function changeJournalDirectory(newDir: string): Promise<void> {
   await invoke('change_diary_directory', { newDir });
 }
 
@@ -37,11 +37,11 @@ export async function changePassword(oldPassword: string, newPassword: string): 
   await invoke('change_password', { oldPassword, newPassword });
 }
 
-export async function resetDiary(): Promise<void> {
+export async function resetJournal(): Promise<void> {
   await invoke('reset_diary');
 }
 
-export async function unlockDiaryWithKeypair(keyPath: string): Promise<void> {
+export async function unlockJournalWithKeypair(keyPath: string): Promise<void> {
   await invoke('unlock_diary_with_keypair', { keyPath });
 }
 
@@ -152,6 +152,10 @@ export async function deleteEntryIfEmpty(
   text: string,
 ): Promise<boolean> {
   return await invoke('delete_entry_if_empty', { id, title, text });
+}
+
+export async function deleteEntry(id: number): Promise<void> {
+  return invoke('delete_entry', { id });
 }
 
 export async function getAllEntryDates(): Promise<string[]> {
@@ -267,4 +271,17 @@ export async function runExportPlugin(pluginId: string, filePath: string): Promi
 // File utility commands
 export async function readFileBytes(path: string): Promise<number[]> {
   return await invoke('read_file_bytes', { path });
+}
+
+// Debug commands
+export interface DebugDumpResult {
+  file_path: string;
+  generated_at: string;
+}
+
+export async function generateDebugDump(
+  filePath: string,
+  preferencesJson: string,
+): Promise<DebugDumpResult> {
+  return await invoke<DebugDumpResult>('generate_debug_dump', { filePath, preferencesJson });
 }

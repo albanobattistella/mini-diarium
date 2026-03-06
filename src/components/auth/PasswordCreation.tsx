@@ -1,5 +1,6 @@
 import { createSignal, Show } from 'solid-js';
-import { createDiary, goToJournalPicker } from '../../state/auth';
+import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import { createJournal, goToJournalPicker } from '../../state/auth';
 
 export default function PasswordCreation() {
   const [password, setPassword] = createSignal('');
@@ -25,14 +26,9 @@ export default function PasswordCreation() {
       return;
     }
 
-    if (pwd.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-
     try {
       setIsCreating(true);
-      await createDiary(pwd);
+      await createJournal(pwd);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -50,13 +46,13 @@ export default function PasswordCreation() {
           </div>
           <h1 class="mb-2 text-center text-3xl font-bold text-primary">Welcome to Mini Diarium</h1>
           <p class="mb-5 text-center text-sm text-secondary">
-            Create a password to secure your diary
+            Create a password to secure your journal
           </p>
 
           <form onSubmit={handleSubmit} class="space-y-6">
             <div>
               <label for="password" class="mb-2 block text-sm font-medium text-secondary">
-                Password
+                Password <span class="text-xs text-tertiary">(1+ characters, 12+ recommended)</span>
               </label>
               <input
                 id="password"
@@ -69,6 +65,7 @@ export default function PasswordCreation() {
                 placeholder="Enter your password"
                 autocomplete="new-password"
               />
+              <PasswordStrengthIndicator password={password()} />
             </div>
 
             <div>
@@ -96,16 +93,16 @@ export default function PasswordCreation() {
 
             <button
               type="submit"
-              data-testid="create-diary-button"
+              data-testid="create-journal-button"
               disabled={isCreating()}
               class="w-full rounded-md bg-blue-600 px-4 py-3 font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isCreating() ? 'Creating...' : 'Create Diary'}
+              {isCreating() ? 'Creating...' : 'Create Journal'}
             </button>
 
             <div class="mt-4 text-center">
               <p class="text-xs text-tertiary">
-                Your diary will be encrypted and stored locally on your device.
+                Your journal will be encrypted and stored locally on your device.
               </p>
             </div>
 

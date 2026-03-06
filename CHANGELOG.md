@@ -2,6 +2,37 @@
 
 All notable changes to Mini Diarium are documented here. This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.5] — 06-03-2026
+
+### Added
+
+- **Advanced tab in Preferences** with a "Generate Debug Dump" button — exports a privacy-safe JSON diagnostic file (app version, OS/platform, schema version, entry counts, auth method types, backup count, plugin count, preferences); no entry content, passwords, or key material is ever included
+- **Month/year picker in calendar header**: clicking the month/year label in the sidebar calendar now toggles an inline month picker. The calendar body switches to a 3×4 month grid with year-step arrows; selecting a month jumps directly to that month and closes the picker. The currently displayed month is highlighted in the grid. No new dependencies. (#43)
+- **Delete entry button for multi-entry days**: a "−" button now appears next to the "+" button in the entry navigator when a day has more than one entry. Clicking "−" opens a confirmation dialog ("Delete Entry" — "Are you sure you want to delete this entry?") and, if confirmed, deletes the currently selected entry and navigates to the next available entry for the same day (staying at the same index, clamping to bounds if the last entry was deleted). The button is only visible when the day has multiple entries and is disabled while an entry is being created. (#43)
+
+### Changed
+
+- **Unified user-facing terminology to "Journal"**: all UI text, error messages, and documentation now consistently use "Journal" instead of the mixed "diary"/"journal" wording; internal Tauri command names and filesystem identifiers (`diary.db`) are preserved for compatibility (issue #46)
+- **Auto-select last-used journal on startup**: the app now skips the Journal Picker when a previously used journal is known (`active_journal_id` set in config). `initializeAuth()` calls `refreshAuthState()` directly and transitions to the password prompt (or unlocked state if already unlocked). The Journal Picker is shown only on a fresh install or when no active journal is configured. (#43)
+- **Reduced password minimum length to 1 character:** the 8-character minimum has been removed. Passwords must be non-empty; a visual strength indicator now guides users with feedback on weak/medium/strong passwords. Very weak passwords show an additional warning banner with recommendations. This aligns with the cryptographic reality that Argon2id protects any password length, while giving users control over their security tradeoffs. (#43)
+- **Website SEO/GEO follow-up pass (2026-03-06)**: replaced the 4.5 MB hero GIF with compressed MP4/WebM demo media plus a poster image, switched the stylesheet to inline-critical + non-blocking loading, updated title/description metadata for search intent, replaced the social preview SVG with a PNG, changed the hero download CTAs to distinct Windows/macOS/Linux direct installer links with ARIA labels, added apex-canonical redirect/cache parity to the nginx reference config, and documented post-release Search Console/IndexNow/Cloudflare ops in the release guide.
+
+### Fixed
+
+- **Window position flash on startup**: the main window no longer flashes at the default position before jumping to the saved position. The window is now created hidden (`"visible": false` in `tauri.conf.json`) and shown explicitly after `tauri-plugin-window-state` has restored the saved bounds. (#43)
+- **"+" add-entry button**: the button to create an additional entry for the same day now correctly guards against concurrent calls using a reactive signal. The button is disabled while creation is in flight, preventing duplicate entries from rapid clicks. Errors are no longer silently swallowed. (#43)
+- **"Go to today" calendar button**: clicking the calendar icon in the sidebar now correctly navigates the calendar month view. A `createEffect` in `Calendar.tsx` watches `selectedDate` and syncs `currentMonth` whenever the selected date falls outside the currently displayed month — fixing all month-navigation cases including "go to today", go-to-date overlay, and day/month menu navigation. (#43)
+- **Clicking adjacent-month days in calendar**: days from the previous or next month shown in the calendar grid are now clickable. The `isCurrentMonth` guard has been removed from `handleDayClick` and the `disabled` attribute; only future dates (when the preference is off) remain disabled. (#43)
+- **Sidebar header border alignment**: the sidebar title bar and the main header bar now share the same rendered height (64 px). Previously the sidebar's text-only header was 12 px shorter than the main header whose icon buttons set the height, causing the bottom borders to visually misalign. (#43)
+- **"Go to today" button alignment**: the button in the sidebar was right-aligned (`justify-end`) while the calendar below it is left-aligned. Changed to `justify-start` so the button aligns with the calendar's left edge. (#43)
+- **Settings tab active state on light theme**: the active tab in Preferences used hardcoded Tailwind classes (`bg-blue-100 text-blue-700`) that could render with low contrast. Replaced with CSS-variable classes (`bg-active text-primary`) that correctly follow the current theme in both light and dark mode. (#43)
+- **Editor placeholder showing "Loading…"**: TipTap's placeholder extension showed "Loading…" whenever the editor was empty during an async entry load, which could flicker on fast navigations. Placeholders are now always static ("Title (optional)" / "What's on your mind today?"). (#43)
+- **Calendar month navigation broken by reactive loop**: clicking the previous/next month buttons had no effect because the `createEffect` that syncs `currentMonth` to `selectedDate` was also reading `currentMonth()` as a reactive dependency — causing it to immediately reset the month back. Fixed by using `untrack(currentMonth)` so the effect only re-runs when `selectedDate` changes.
+- **"+" button creates spurious entry on empty day**: pressing "+" when no content existed would create and immediately delete an empty entry (visible briefly as a dot in the calendar). The button is now disabled unless the current entry has body content. Contextual tooltip text explains why the button is disabled ("Write something first to add another entry for this day") or what it does when enabled ("Add another entry for this day").
+- **New entry auto-deleted 500 ms after creation**: after creating a new entry via "+", `setContent('')` caused TipTap to fire `onUpdate` synchronously with empty content, scheduling a debounced save that would delete the blank entry. An explicit `debouncedSave.cancel()` now runs immediately after state is reset to prevent this.
+- **Multi-entry day counter order**: entries for a day are now displayed in chronological order (oldest = 1/N, newest = N/N). Previously the backend's newest-first ordering made the counter confusingly start at 1 for the most-recent entry. New entries created via "+" always land at position N/N. Opening a multi-entry day now navigates to the newest entry (N/N) instead of the oldest.
+- **Empty entries persist on lock/switch**: empty entries created with the "+" button now correctly delete themselves when the diary is locked or when switching journals without adding content. Previously, the empty entry would remain in the database until the user navigated to a different entry. The fix implements a pre-lock event pattern that ensures `saveCurrentById()` (which deletes empty entries) is called before the database is locked, covering all lock paths (manual button, OS session lock, and journal switching).
+
 ## [0.4.4] — 03-03-2026
 
 ### Added
@@ -9,7 +40,6 @@ All notable changes to Mini Diarium are documented here. This project uses [Sema
 - **Text highlight formatting** in the advanced editor toolbar (`Ctrl/Cmd+Shift+H`). Highlighted text is rendered with a yellow background (theme-safe in light and dark mode). HTML `<mark>` tags are preserved in storage and JSON export; Markdown export strips the tags and keeps the text. (#41)
 - **Embedded images in the editor**: images can now be inserted into diary entries via drag-and-drop, clipboard paste (Ctrl/Cmd+V), or the new "Insert image" button in the advanced toolbar. Images are resized client-side (max 1200 × 1200 px, JPEG 85% quality) before embedding as base64 data URIs in the encrypted entry HTML. Plaintext never touches disk. Note: JSON/Markdown exports will include the full base64 strings and may be large for entries with many images. (#40)
 - **Configurable editor font size** (12–24 px) in Preferences → Writing (#30)
-
 
 ## [0.4.3] — 01-03-2026
 
@@ -64,7 +94,6 @@ All notable changes to Mini Diarium are documented here. This project uses [Sema
 - **Plugin documentation structure simplified**: user plugin documentation and canonical example now live together in `docs/user-plugins/` for discoverability; README now links to this area from a dedicated **Extending Mini Diarium** section.
 - **E2E test isolation hardened**: `bun run test:e2e` now runs in deterministic clean-room mode (isolated diary data, isolated WebView profile on Windows, fixed 800×660 viewport, and backend window-state persistence disabled via `MINI_DIARIUM_E2E=1`), with `bun run test:e2e:stateful` available for persistence-focused checks in a repo-local state directory.
 
-
 ## [0.4.0] - 25-02-2026
 
 ### Added
@@ -86,7 +115,6 @@ All notable changes to Mini Diarium are documented here. This project uses [Sema
 ### Changed
 
 - **PHILOSOPHY.md restructured and expanded**: split into Part I (what and why for each principle) and Part II (how each principle is implemented in the codebase). Added concrete extension/plugin system description, E2E test stack guidance, rationale for the no-password-recovery rule, OS integration and Rhai scripting as justified complexity examples, a typo fix ("rich-text support"), a clarification distinguishing local Rhai plugins from plugin marketplaces, a version/date header, and a new "Honest threat documentation" non-negotiable. README now links to PHILOSOPHY.md under a dedicated Philosophy section.
-
 
 ## [0.3.0] — 2026-02-21
 
@@ -128,8 +156,6 @@ All notable changes to Mini Diarium are documented here. This project uses [Sema
 
 - **Documentation diagrams synced with codebase**: refreshed architecture/context diagrams to match the current SolidJS signal state model, command/backend layout, and security posture (no plaintext search index); updated stale `AGENTS.md`/`CLAUDE.md` diagram references and regeneration instructions; added light-theme `architecture.svg` generation and CI existence checks alongside `architecture-dark.svg`.
 
-
-
 ## [0.2.1] — 2026-02-19
 
 ### Added
@@ -143,8 +169,6 @@ All notable changes to Mini Diarium are documented here. This project uses [Sema
 - macOS "damaged and can't be opened" error: added ad-hoc code signing (`signingIdentity: "-"`) and updated installation instructions to use `xattr -cr` workaround
 - macOS release builds now correctly produce a universal binary (arm64 + x86_64) by passing `--target universal-apple-darwin` to the build step
 - The entries_skipped field was declared but never used, it was added a condition in the for loop to skip and count entries that have no meaningful content rather than inserting empty records. by @Yujonpradhananga
-
-
 
 ## [0.2.0] — 2026-02-18
 
@@ -181,8 +205,6 @@ All notable changes to Mini Diarium are documented here. This project uses [Sema
 - `change_password` now re-wraps the master key in O(1) — no entry re-encryption required regardless of diary size
 - Existing v1 and v2 databases are automatically migrated to v3 then v4 on the first unlock
 - App icon and logo updated across all platforms (Windows ICO, macOS ICNS, Linux PNG, Windows AppX, iOS, Android); logo also shown on the unlock and diary creation screens
-
-
 
 ## [0.1.0] — 2026-02-16
 
