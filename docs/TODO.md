@@ -39,6 +39,7 @@ TODO entry format:
 
 ## Low Priority / Future
 
+- [ ] **Display entry timestamps** — show `date_created` and `date_updated` timestamps of the current entry in the editor UI (e.g. below the title or in the header); both fields are already returned by `get_entries_for_date` — no backend changes needed; format using the OS locale; only show `date_updated` when it differs from `date_created`; must respect the `hideTitles` preference if the chosen placement is near the title area
 - [ ] **PDF export** — convert journal entries to PDF (A4); likely via Tauri webview printing
 - [ ] **Text input extension point** — create a plugin/extension interface for alternative entry methods so official and user plugins can provide text input flows such as dictation, LLM-assisted drafting, and other future capture modes; define capability boundaries, permission model, and how plugins hand content into the editor without weakening the app’s privacy guarantees
 - [ ] **Statistics extension point** — add a plugin/extension interface for writing statistics so official and user plugins can calculate custom metrics and surface them in the statistics UI; define the data contract, execution/sandbox constraints, and how custom statistics are registered and rendered without weakening the app’s privacy-first local-only model
