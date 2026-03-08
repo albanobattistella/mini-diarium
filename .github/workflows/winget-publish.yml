@@ -6,6 +6,11 @@ permissions:
 on:
   release:
     types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.4.6)'
+        required: true
 
 jobs:
   publish-winget:
@@ -28,8 +33,8 @@ jobs:
         id: prep
         shell: pwsh
         run: |
-          # Extract tag from GITHUB_REF_NAME (format: v0.4.6)
-          $tag = "${{ github.ref_name }}"
+          # Extract tag: use manual input if triggered via workflow_dispatch, else the release tag
+          $tag = if ("${{ inputs.tag }}") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
           # Strip 'v' prefix to get version (0.4.6)
           $version = $tag -replace '^v', ''
 
@@ -47,7 +52,7 @@ jobs:
       - name: Verify release asset exists
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = if ("${{ inputs.tag }}") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
           $assetName = "${{ steps.prep.outputs.asset_name }}"
 
           # Use gh CLI to check if asset exists
