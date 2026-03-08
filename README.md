@@ -2,13 +2,13 @@
 
 [![CI Status](https://github.com/fjrevoredo/mini-diarium/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/fjrevoredo/mini-diarium/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.4.5-blue.svg)](https://github.com/fjrevoredo/mini-diarium/releases)
+[![Version](https://img.shields.io/badge/version-0.4.6-blue.svg)](https://github.com/fjrevoredo/mini-diarium/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/fjrevoredo/mini-diarium#download)
 [![Follow on X](https://img.shields.io/badge/Follow-%40MiniDiarium-000000?logo=x)](https://x.com/MiniDiarium)
 
 **Website:** [mini-diarium.com](https://mini-diarium.com)
 
-A local-first journal with serious encryption. Free, open source, and never touches the internet.
+A local-only journal with serious encryption. Free, open source, and never touches the internet.
 
 Mini Diarium keeps your journal private. Every entry is encrypted with AES-256-GCM, the app never connects to the internet, and your data never leaves your machine. Built with Tauri, SolidJS, and Rust.
 
@@ -128,7 +128,6 @@ When saving an entry:
   </picture>
 </p>
 
-
 ---
 
 # Layered Architecture
@@ -149,6 +148,20 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | Windows  | `.msi` or `.exe` (NSIS installer, no admin required) |
 | macOS    | `.dmg`                                               |
 | Linux    | `.AppImage` or `.deb`                                |
+
+### Windows (WinGet)
+
+The easiest way to install Mini Diarium on Windows is via WinGet:
+
+```powershell
+winget install mini-diarium
+```
+
+To update an existing installation later:
+
+```powershell
+winget upgrade mini-diarium
+```
 
 ### Homebrew (macOS)
 
@@ -206,12 +219,12 @@ Most journal apps only offer a password. Mini Diarium also lets you unlock with 
 
 ### Why use a key file?
 
-| Scenario | How a key file helps |
-|----------|----------------------|
-| **Physical second factor** | Keep the `.key` file on a USB drive. The journal can only be unlocked when the drive is plugged in, with no app, no phone, and no OTP codes. |
-| **Password manager integration** | Store the `.key` file as a secure attachment. Unlock without memorizing a passphrase at all. |
-| **Multiple machines** | Register one key file per machine. Revoke access to a single machine by removing that slot without touching your password or re-encrypting any entries. |
-| **Shared account, separate keys** | Register several key files under different labels. Each is independent, and removing one doesn't affect the others. |
+| Scenario                          | How a key file helps                                                                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Physical second factor**        | Keep the `.key` file on a USB drive. The journal can only be unlocked when the drive is plugged in, with no app, no phone, and no OTP codes.            |
+| **Password manager integration**  | Store the `.key` file as a secure attachment. Unlock without memorizing a passphrase at all.                                                            |
+| **Multiple machines**             | Register one key file per machine. Revoke access to a single machine by removing that slot without touching your password or re-encrypting any entries. |
+| **Shared account, separate keys** | Register several key files under different labels. Each is independent, and removing one doesn't affect the others.                                     |
 
 ### How it works
 
@@ -240,15 +253,15 @@ From that point you can unlock from the login screen by switching to **Key File*
 
 ## Keyboard Shortcuts
 
-| Action         | Shortcut           |
-| -------------- | ------------------ |
-| Previous Day   | `Ctrl+[`           |
-| Next Day       | `Ctrl+]`           |
-| Go to Today    | `Ctrl+T`           |
-| Go to Date     | `Ctrl+G`           |
-| Previous Month | `Ctrl+Shift+[`     |
-| Next Month     | `Ctrl+Shift+]`     |
-| Preferences    | `Ctrl+,`           |
+| Action         | Shortcut       |
+| -------------- | -------------- |
+| Previous Day   | `Ctrl+[`       |
+| Next Day       | `Ctrl+]`       |
+| Go to Today    | `Ctrl+T`       |
+| Go to Date     | `Ctrl+G`       |
+| Previous Month | `Ctrl+Shift+[` |
+| Next Month     | `Ctrl+Shift+]` |
+| Preferences    | `Ctrl+,`       |
 
 Statistics, Import, and Export are available via the Journal menu (no default keyboard accelerators).
 
@@ -279,6 +292,7 @@ Artifacts will be in `src-tauri/target/release/bundle/`.
 - [Kobalte](https://kobalte.dev/): accessible UI primitives
 
 ## Known Issues
+
 - Concurrent access to the journal is not supported
 
 ## Extending Mini Diarium
