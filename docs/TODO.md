@@ -14,7 +14,6 @@ TODO entry format:
 
 ## High Priority
 
-- [x] **Dark theme form-control contrast on Linux** — in dark theme, text inside password fields, text inputs, and native dropdowns must remain readable on Linux desktop themes; cover the auth screens, Preferences, Import/Export overlays, and editor toolbar selects; add regression coverage so issue [#48](https://github.com/fjrevoredo/mini-diarium/issues/48) does not recur
 
 ---
 
@@ -39,6 +38,7 @@ TODO entry format:
 
 ## Low Priority / Future
 
+- [x] **Add debug dump prompt to bug report template** — update `.github/ISSUE_TEMPLATE/bug_report.md` to instruct users to attach a debug dump when reporting issues: open the app → Help → Generate Debug Dump, then attach the resulting JSON file; add it as a dedicated section (e.g. "Debug Dump") between "Actual behavior" and "Environment"; keep it optional for issues where the app cannot be opened
 - [ ] **Display entry timestamps** — show `date_created` and `date_updated` timestamps of the current entry in the editor UI (e.g. below the title or in the header); both fields are already returned by `get_entries_for_date` — no backend changes needed; format using the OS locale; only show `date_updated` when it differs from `date_created`; must respect the `hideTitles` preference if the chosen placement is near the title area
 - [ ] **PDF export** — convert journal entries to PDF (A4); likely via Tauri webview printing
 - [ ] **Text input extension point** — create a plugin/extension interface for alternative entry methods so official and user plugins can provide text input flows such as dictation, LLM-assisted drafting, and other future capture modes; define capability boundaries, permission model, and how plugins hand content into the editor without weakening the app’s privacy guarantees
