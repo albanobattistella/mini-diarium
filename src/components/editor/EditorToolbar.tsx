@@ -13,6 +13,10 @@ import {
   Code,
   Minus,
   ImagePlus,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
 } from 'lucide-solid';
 
 interface EditorToolbarProps {
@@ -32,6 +36,9 @@ export default function EditorToolbar(props: EditorToolbarProps) {
   const [isCodeActive, setIsCodeActive] = createSignal(false);
   const [isHighlightActive, setIsHighlightActive] = createSignal(false);
   const [activeHeadingLevel, setActiveHeadingLevel] = createSignal(0);
+  const [activeAlignment, setActiveAlignment] = createSignal<
+    'left' | 'center' | 'right' | 'justify'
+  >('left');
 
   // Update active states when editor changes
   createEffect(() => {
@@ -57,6 +64,15 @@ export default function EditorToolbar(props: EditorToolbarProps) {
               ? 3
               : 0,
       );
+      setActiveAlignment(
+        editor.isActive({ textAlign: 'center' })
+          ? 'center'
+          : editor.isActive({ textAlign: 'right' })
+            ? 'right'
+            : editor.isActive({ textAlign: 'justify' })
+              ? 'justify'
+              : 'left',
+      );
     };
 
     updateActiveStates();
@@ -72,7 +88,7 @@ export default function EditorToolbar(props: EditorToolbarProps) {
 
   const btnBase =
     'rounded p-2 transition-colors text-secondary hover:bg-tertiary hover:text-primary';
-  const btnActive = 'rounded p-2 transition-colors bg-blue-100 text-blue-700';
+  const btnActive = 'rounded p-2 transition-colors btn-active';
 
   const btnClass = (active: boolean) => (active ? btnActive : btnBase);
 
@@ -112,7 +128,7 @@ export default function EditorToolbar(props: EditorToolbarProps) {
                   .run();
               }
             }}
-            class="h-8 rounded border border-primary bg-primary px-2 text-sm text-primary transition-colors hover:bg-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="h-8 rounded border border-primary bg-primary px-2 text-sm text-primary transition-colors hover:bg-tertiary focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]"
           >
             <option value="0">Normal</option>
             <option value="1">Heading 1</option>
@@ -236,6 +252,43 @@ export default function EditorToolbar(props: EditorToolbarProps) {
             aria-label="Insert image"
           >
             <ImagePlus size={18} />
+          </button>
+        </Show>
+
+        {/* Alignment controls — advanced only */}
+        <Show when={preferences().advancedToolbar}>
+          <div class="mx-1 h-6 w-px bg-primary" />
+          <button
+            onClick={() => props.editor?.chain().focus().setTextAlign('left').run()}
+            class={btnClass(activeAlignment() === 'left')}
+            title="Align left"
+            aria-label="Align left"
+          >
+            <AlignLeft size={18} />
+          </button>
+          <button
+            onClick={() => props.editor?.chain().focus().setTextAlign('center').run()}
+            class={btnClass(activeAlignment() === 'center')}
+            title="Align center"
+            aria-label="Align center"
+          >
+            <AlignCenter size={18} />
+          </button>
+          <button
+            onClick={() => props.editor?.chain().focus().setTextAlign('right').run()}
+            class={btnClass(activeAlignment() === 'right')}
+            title="Align right"
+            aria-label="Align right"
+          >
+            <AlignRight size={18} />
+          </button>
+          <button
+            onClick={() => props.editor?.chain().focus().setTextAlign('justify').run()}
+            class={btnClass(activeAlignment() === 'justify')}
+            title="Justify"
+            aria-label="Justify"
+          >
+            <AlignJustify size={18} />
           </button>
         </Show>
       </div>
