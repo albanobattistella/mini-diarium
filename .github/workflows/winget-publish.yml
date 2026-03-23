@@ -80,7 +80,7 @@ jobs:
 
           Set-Content -Path release-body.md -Value $release.body -NoNewline
           "release_url=$($release.html_url)" >> $env:GITHUB_OUTPUT
-          "release_date=$($release.published_at.Substring(0, 10))" >> $env:GITHUB_OUTPUT
+          "release_date=$($release.published_at.ToString('yyyy-MM-dd'))" >> $env:GITHUB_OUTPUT
 
       - name: Download pinned wingetcreate
         shell: pwsh
