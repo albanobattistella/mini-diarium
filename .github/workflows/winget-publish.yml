@@ -154,7 +154,7 @@ jobs:
             Write-Error "ReleaseNotesUrl was not updated in $($localeManifest.FullName)"
             exit 1
           }
-          "manifest_path=$($localeManifest.FullName)" >> $env:GITHUB_OUTPUT
+          "manifest_dir=$($localeManifest.DirectoryName)" >> $env:GITHUB_OUTPUT
 
       - name: Submit WinGet PR
         shell: pwsh
@@ -162,13 +162,13 @@ jobs:
           WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
           $version = "${{ steps.prep.outputs.version }}"
-          $manifestPath = "${{ steps.verify_manifest.outputs.manifest_path }}"
+          $manifestDir = "${{ steps.verify_manifest.outputs.manifest_dir }}"
 
           .\wingetcreate.exe submit `
             --prtitle "Update ${{ env.PACKAGE_IDENTIFIER }} version $version" `
             --token $env:WINGET_CREATE_GITHUB_TOKEN `
             --no-open `
-            $manifestPath
+            $manifestDir
 
           if ($LASTEXITCODE -ne 0) {
             Write-Error "wingetcreate submit failed with exit code $LASTEXITCODE"
