@@ -121,8 +121,7 @@ jobs:
           node scripts/enrich-winget-manifest.mjs `
             --manifest-dir winget-manifests `
             --release-notes-file release-body.md `
-            --release-notes-url "${{ steps.release.outputs.release_url }}" `
-            --release-date "${{ steps.release.outputs.release_date }}"
+            --release-notes-url "${{ steps.release.outputs.release_url }}"
 
       - name: Verify enriched manifest
         id: verify_manifest
@@ -140,10 +139,6 @@ jobs:
           $content = Get-Content $localeManifest.FullName -Raw
           if ($content -notmatch '(?m)^ManifestVersion:\s*1\.12\.0$') {
             Write-Error "ManifestVersion 1.12.0 not found in $($localeManifest.FullName)"
-            exit 1
-          }
-          if ($content -notmatch "(?m)^ReleaseDate:\s+${{ steps.release.outputs.release_date }}$") {
-            Write-Error "ReleaseDate was not updated in $($localeManifest.FullName)"
             exit 1
           }
           if ($content -notmatch '(?m)^ReleaseNotes:\s+\|-$') {

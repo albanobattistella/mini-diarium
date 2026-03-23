@@ -195,13 +195,13 @@ function buildReleaseNotesField(releaseNotes) {
   return ['ReleaseNotes: |-', ...releaseNotes.split('\n').map((line) => `  ${line}`)];
 }
 
-export function enrichDefaultLocaleManifest(manifestText, { releaseNotes, releaseNotesUrl, releaseDate }) {
+export function enrichDefaultLocaleManifest(manifestText, { releaseNotes, releaseNotesUrl }) {
   let lines = manifestText.replace(/\r\n/g, '\n').trimEnd().split('\n');
+  // Remove ReleaseDate if wingetcreate wrote it here — it belongs in the installer manifest only.
   lines = removeManifestField(lines, 'ReleaseDate');
   lines = removeManifestField(lines, 'ReleaseNotes');
   lines = removeManifestField(lines, 'ReleaseNotesUrl');
   lines = insertBeforeManifestType(lines, [
-    ...(releaseDate ? [`ReleaseDate: ${releaseDate}`] : []),
     ...buildReleaseNotesField(releaseNotes),
     `ReleaseNotesUrl: ${releaseNotesUrl}`,
   ]);
@@ -238,7 +238,6 @@ function main() {
   const enrichedManifest = enrichDefaultLocaleManifest(manifestText, {
     releaseNotes,
     releaseNotesUrl,
-    releaseDate,
   });
 
   writeFileSync(manifestPath, enrichedManifest, 'utf8');
