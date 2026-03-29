@@ -33,7 +33,7 @@ jobs:
 
       - name: Run benchmarks (bencher output format)
         working-directory: src-tauri
-        run: cargo bench -- --output-format bencher | tee ../bench-output.txt 2>&1
+        run: cargo bench --benches -- --output-format bencher | tee ../bench-output.txt
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
