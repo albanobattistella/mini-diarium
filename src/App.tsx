@@ -4,6 +4,8 @@ import { authState, initializeAuth, lockJournal, setupAuthEventListeners } from 
 import { initializeTheme } from './lib/theme';
 import { createLogger } from './lib/logger';
 import { preferences } from './state/preferences';
+import { setLocale, useI18n } from './i18n';
+import { updateMenuLocale } from './lib/tauri';
 import { isAboutOpen, setIsAboutOpen } from './state/ui';
 import JournalPicker from './components/auth/JournalPicker';
 import PasswordCreation from './components/auth/PasswordCreation';
@@ -14,8 +16,18 @@ import AboutOverlay from './components/overlays/AboutOverlay';
 const log = createLogger('App');
 
 function App() {
+  const t = useI18n();
   const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'] as const;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Sync locale signal from persisted preference — runs immediately on mount
+  // and re-runs whenever preferences().language changes.
+  // Also updates native OS menu labels via the backend command.
+  createEffect(() => {
+    const lang = preferences().language;
+    setLocale(lang);
+    void updateMenuLocale(lang);
+  });
 
   createEffect(() => {
     const { autoLockEnabled, autoLockTimeout } = preferences();
@@ -72,7 +84,7 @@ function App() {
           <div class="flex h-full items-center justify-center bg-secondary">
             <div class="text-center">
               <div class="mb-4 h-12 w-12 animate-spin rounded-full border-4 spinner-border border-t-transparent mx-auto" />
-              <p class="text-secondary">Loading...</p>
+              <p class="text-secondary">{t('layout.loading')}</p>
             </div>
           </div>
         </Match>

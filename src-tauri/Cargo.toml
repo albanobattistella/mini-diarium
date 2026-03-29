@@ -1,6 +1,6 @@
 [package]
 name = "mini-diarium"
-version = "0.4.13"
+version = "0.4.14"
 description = "A modern, encrypted, local-first desktop journaling application"
 authors = ["you"]
 edition = "2021"
@@ -45,6 +45,23 @@ lto = true
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "auth_bench"
+harness = false
+
+[[bench]]
+name = "cipher_bench"
+harness = false
+
+[[bench]]
+name = "db_bench"
+harness = false
+
+[[bench]]
+name = "word_count_bench"
+harness = false
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [

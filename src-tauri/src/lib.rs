@@ -132,8 +132,9 @@ pub fn run() {
             app.manage(std::sync::Mutex::new(registry));
 
             // Build and set application menu
-            let lockable = menu::build_menu(app.handle())?;
+            let (lockable, translatable) = menu::build_menu(app.handle())?;
             app.manage(lockable);
+            app.manage(translatable);
 
             if let Err(error) = screen_lock::init(app.handle()) {
                 warn!("Screen-lock listener initialization failed: {}", error);
@@ -201,8 +202,9 @@ pub fn run() {
             commands::navigation::navigate_next_month,
             // Stats
             commands::stats::get_statistics,
-            // Files (image embedding support)
+            // Files (image embedding support + markdown import)
             commands::files::read_file_bytes,
+            commands::files::read_text_file,
             // Import
             commands::import::import_minidiary_json,
             commands::import::import_dayone_json,
@@ -218,6 +220,8 @@ pub fn run() {
             commands::plugin::run_export_plugin,
             // Debug
             commands::debug::generate_debug_dump,
+            // Menu locale
+            commands::menu::update_menu_locale,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

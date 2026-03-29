@@ -273,6 +273,10 @@ export async function readFileBytes(path: string): Promise<number[]> {
   return await invoke('read_file_bytes', { path });
 }
 
+export async function readTextFile(path: string): Promise<string> {
+  return await invoke('read_text_file', { path });
+}
+
 // Debug commands
 export interface DebugDumpResult {
   file_path: string;
@@ -284,4 +288,9 @@ export async function generateDebugDump(
   preferencesJson: string,
 ): Promise<DebugDumpResult> {
   return await invoke<DebugDumpResult>('generate_debug_dump', { filePath, preferencesJson });
+}
+
+// Menu commands
+export async function updateMenuLocale(locale: string): Promise<void> {
+  await invoke('update_menu_locale', { locale });
 }

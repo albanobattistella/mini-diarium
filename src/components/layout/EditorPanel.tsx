@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onCleanup, onMount, Show, untrack } from 'solid-js';
 import { Editor } from '@tiptap/core';
 import { createLogger } from '../../lib/logger';
+import { useI18n } from '../../i18n';
 import TitleEditor from '../editor/TitleEditor';
 import DiaryEditor from '../editor/DiaryEditor';
 import WordCount from '../editor/WordCount';
@@ -13,17 +14,22 @@ import {
   deleteEntryIfEmpty,
   deleteEntry,
   getAllEntryDates,
+  readTextFile,
 } from '../../lib/tauri';
 import type { DiaryEntry } from '../../lib/tauri';
 import { debounce } from '../../lib/debounce';
 import { formatTimestamp } from '../../lib/dates';
 import { isSaving, setIsSaving, setEntryDates, registerCleanupCallback } from '../../state/entries';
 import { preferences } from '../../state/preferences';
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { confirm, open as openDialog } from '@tauri-apps/plugin-dialog';
+import { parseMarkdownToHtml } from '../../lib/markdown';
+import { mapTauriError } from '../../lib/errors';
+import { countWordsInHtml, countWordsFromText } from '../../lib/wordcount';
 
 const log = createLogger('Editor');
 
 export default function EditorPanel() {
+  const t = useI18n();
   const [title, setTitle] = createSignal('');
   const [content, setContent] = createSignal('');
   const [wordCount, setWordCount] = createSignal(0);
@@ -35,9 +41,26 @@ export default function EditorPanel() {
   const [currentIndex, setCurrentIndex] = createSignal(0);
   const [pendingEntryId, setPendingEntryId] = createSignal<number | null>(null);
 
+  const [importError, setImportError] = createSignal<string | null>(null);
+
   let isDisposed = false;
+  let pendingCreationPromise: Promise<DiaryEntry> | null = null;
   let loadRequestId = 0;
   let saveRequestId = 0;
+  // Guards the onSetContent(isEmpty=true) auto-delete debounce for an entry that was
+  // just created by addEntry(). The race: addEntry() calls debouncedSave.cancel()
+  // synchronously (line 290), but DiaryEditor's createEffect runs as a SolidJS
+  // microtask — at the `await getAllEntryDates()` on line 293 — AFTER cancel() has
+  // already returned. onSetContent(isEmpty=true) then re-queues debouncedSave on a
+  // fresh timer that was never cancelled, deleting the entry before the user types.
+  //
+  // Set in addEntry() after the new entry's ID is known. Cleared on first real user
+  // input in handleContentUpdate() or handleTitleInput(). While set, the onSetContent
+  // callback skips queuing the auto-delete debounce for this specific entry ID.
+  //
+  // Note: navigateToEntry and loadEntriesForDate are unaffected — they call
+  // saveCurrentById() directly, which still cleans up blank entries on navigation.
+  let justCreatedEntryId: number | null = null;
   const [isCreatingEntry, setIsCreatingEntry] = createSignal(false);
   // Reactive trigger: updated by handleContentUpdate (user edits via onUpdate) and by
   // the onSetContent callback from DiaryEditor (programmatic loads via setContent).
@@ -95,8 +118,7 @@ export default function EditorPanel() {
           setPendingEntryId(entry.id);
           setTitle(entry.title);
           setContent(entry.text);
-          const words = entry.text.trim().split(/\s+/).filter(Boolean);
-          setWordCount(words.length);
+          setWordCount(countWordsInHtml(entry.text));
           // Prevent the debounced save that setContent triggers via TipTap —
           // the remaining entry is already persisted and has not changed.
           debouncedSave.cancel();
@@ -133,8 +155,8 @@ export default function EditorPanel() {
   // later), not at call-site time — pre-reading the value would capture stale emptiness state
   // before the user has finished typing.
   // eslint-disable-next-line solid/reactivity
-  const debouncedSave = debounce((entryId: number, t: string, c: string) => {
-    void saveCurrentById(entryId, t, c);
+  const debouncedSave = debounce((entryId: number, titleArg: string, contentArg: string) => {
+    void saveCurrentById(entryId, titleArg, contentArg);
   }, 500);
 
   // Load entries for a date
@@ -183,8 +205,7 @@ export default function EditorPanel() {
         setPendingEntryId(entry.id);
         setTitle(entry.title);
         setContent(entry.text);
-        const words = entry.text.trim().split(/\s+/).filter(Boolean);
-        setWordCount(words.length);
+        setWordCount(countWordsInHtml(entry.text));
       } else {
         setCurrentIndex(0);
         setPendingEntryId(null);
@@ -237,8 +258,7 @@ export default function EditorPanel() {
       setPendingEntryId(entry.id);
       setTitle(entry.title);
       setContent(entry.text);
-      const words = entry.text.trim().split(/\s+/).filter(Boolean);
-      setWordCount(words.length);
+      setWordCount(countWordsInHtml(entry.text));
     } catch (error) {
       log.error('Failed to navigate to entry:', error);
     }
@@ -276,6 +296,7 @@ export default function EditorPanel() {
       const newIndex = idx >= 0 ? idx : 0;
       setCurrentIndex(newIndex);
       setPendingEntryId(newEntry.id);
+      justCreatedEntryId = newEntry.id;
       setTitle('');
       setContent('');
       setWordCount(0);
@@ -297,7 +318,41 @@ export default function EditorPanel() {
     void loadEntriesForDate(selectedDate());
   });
 
+  const startEntryCreation = (reason: string) => {
+    if (isCreatingEntry()) {
+      log.debug(`${reason}: isCreatingEntry guard fired — skipping duplicate creation`);
+      return;
+    }
+    log.info(`${reason}: pendingEntryId null — creating entry for date ${selectedDate()}`);
+    setIsCreatingEntry(true);
+    const creationPromise = createEntry(selectedDate());
+    pendingCreationPromise = creationPromise;
+    void (async () => {
+      try {
+        const newEntry = await creationPromise;
+        pendingCreationPromise = null;
+        if (isDisposed) {
+          log.warn(
+            `${reason}: component disposed during createEntry — id=${newEntry.id}, content will be saved by cleanup callback`,
+          );
+          return;
+        }
+        log.info(`${reason}: createEntry completed, id=${newEntry.id}`);
+        setPendingEntryId(newEntry.id);
+        const refreshed = await fetchEntriesOrdered(selectedDate());
+        if (!isDisposed) setDayEntries(refreshed);
+        debouncedSave(newEntry.id, title(), content());
+      } catch (error) {
+        pendingCreationPromise = null;
+        log.error(`${reason}: failed to create entry:`, error);
+      } finally {
+        setIsCreatingEntry(false);
+      }
+    })();
+  };
+
   const handleContentUpdate = (newContent: string) => {
+    justCreatedEntryId = null; // user typed — entry is no longer "just created"
     setContent(newContent);
     // Update the reactive trigger so isContentEmpty() re-evaluates with TipTap's actual
     // document state. This fires after TipTap processes the content, not when the SolidJS
@@ -308,6 +363,11 @@ export default function EditorPanel() {
         ? edInst.isEmpty || edInst.getText().trim() === ''
         : newContent.trim() === '',
     );
+    setWordCount(
+      edInst && !edInst.isDestroyed
+        ? countWordsFromText(edInst.getText())
+        : countWordsInHtml(newContent),
+    );
     const id = pendingEntryId();
     if (id !== null) {
       debouncedSave(id, title(), newContent);
@@ -317,33 +377,17 @@ export default function EditorPanel() {
       const isEmpty = editor
         ? editor.isEmpty || editor.getText().trim() === ''
         : newContent.trim() === '';
-      if (isEmpty || isCreatingEntry()) return;
-
-      // First real keystroke on empty day — create entry then save
-      setIsCreatingEntry(true);
-      void (async () => {
-        try {
-          const newEntry = await createEntry(selectedDate());
-          if (isDisposed) return;
-          setPendingEntryId(newEntry.id);
-          const refreshed = await fetchEntriesOrdered(selectedDate());
-          if (!isDisposed) setDayEntries(refreshed);
-          // Use current signal values — user may have typed more while awaiting
-          debouncedSave(newEntry.id, title(), content());
-        } catch (error) {
-          log.error('Failed to create entry on first keystroke:', error);
-        } finally {
-          setIsCreatingEntry(false);
-        }
-      })();
+      if (isEmpty) return;
+      log.debug('handleContentUpdate: pendingEntryId=null, first real content keystroke');
+      startEntryCreation('handleContentUpdate');
     }
   };
 
   const handleDeleteEntry = async () => {
     if (dayEntries().length <= 1) return;
 
-    const confirmed = await confirm('Are you sure you want to delete this entry?', {
-      title: 'Delete Entry',
+    const confirmed = await confirm(t('editor.deleteConfirmMessage'), {
+      title: t('editor.deleteConfirmTitle'),
       kind: 'warning',
     });
 
@@ -373,8 +417,7 @@ export default function EditorPanel() {
         setPendingEntryId(entry.id);
         setTitle(entry.title);
         setContent(entry.text);
-        const words = entry.text.trim().split(/\s+/).filter(Boolean);
-        setWordCount(words.length);
+        setWordCount(countWordsInHtml(entry.text));
         setDayEntries(refreshed);
         setCurrentIndex(newIndex);
       }
@@ -383,31 +426,61 @@ export default function EditorPanel() {
     }
   };
 
+  const handleImportMarkdown = async () => {
+    setImportError(null);
+
+    const editor = editorInstance();
+    if (!editor || editor.isDestroyed) {
+      setImportError(t('editor.importMarkdownNoEditor'));
+      return;
+    }
+
+    let filePath: string | null;
+    try {
+      filePath = (await openDialog({
+        multiple: false,
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      })) as string | null;
+    } catch (err) {
+      log.error('Failed to open file dialog:', err);
+      return;
+    }
+    if (!filePath) return; // user cancelled
+
+    let markdown: string;
+    try {
+      markdown = await readTextFile(filePath);
+    } catch (err) {
+      log.error('Failed to read markdown file:', err);
+      setImportError(mapTauriError(err, t));
+      return;
+    }
+
+    const html = parseMarkdownToHtml(markdown);
+
+    if (isContentEmpty()) {
+      // Empty entry: replace content — triggers onUpdate → handleContentUpdate →
+      // auto-creates entry if needed, then queues debouncedSave.
+      editor.commands.setContent(html, { emitUpdate: true });
+    } else {
+      // Non-empty entry: append after horizontal rule separator.
+      // setHorizontalRule() uses the ProseMirror command directly (more reliable than
+      // parsing '<hr />' from an HTML string in insertContent).
+      editor.chain().focus('end').setHorizontalRule().insertContent(html).run();
+      // insertContent triggers onUpdate → handleContentUpdate → debouncedSave.
+    }
+  };
+
   const handleTitleInput = (newTitle: string) => {
+    justCreatedEntryId = null; // user typed — entry is no longer "just created"
     setTitle(newTitle);
     const id = pendingEntryId();
     if (id !== null) {
       debouncedSave(id, newTitle, content());
     } else {
-      // Skip creation on empty title (e.g. programmatic clear)
-      if (newTitle.trim() === '' || isCreatingEntry()) return;
-
-      // First real title keystroke on empty day — create entry then save
-      setIsCreatingEntry(true);
-      void (async () => {
-        try {
-          const newEntry = await createEntry(selectedDate());
-          if (isDisposed) return;
-          setPendingEntryId(newEntry.id);
-          const refreshed = await fetchEntriesOrdered(selectedDate());
-          if (!isDisposed) setDayEntries(refreshed);
-          debouncedSave(newEntry.id, title(), content());
-        } catch (error) {
-          log.error('Failed to create entry on title keystroke:', error);
-        } finally {
-          setIsCreatingEntry(false);
-        }
-      })();
+      if (newTitle.trim() === '') return;
+      log.debug(`handleTitleInput: pendingEntryId=null, title='${newTitle.substring(0, 20)}'`);
+      startEntryCreation('handleTitleInput');
     }
   };
 
@@ -431,7 +504,38 @@ export default function EditorPanel() {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // eslint-disable-next-line solid/reactivity -- cleanup callback runs imperatively on journal lock, not in a reactive tracking scope; reading signals here is intentional snapshot behaviour
     const unregister = registerCleanupCallback(async () => {
+      // If a createEntry() call is in-flight, await it and save immediately.
+      // This window (pendingCreationPromise non-null) is the core of the race:
+      // the cleanup callback fires before the DB is locked but after typing started,
+      // so pendingEntryId is still null and the normal save path below would skip.
+      if (pendingCreationPromise !== null) {
+        try {
+          const newEntry = await pendingCreationPromise;
+          const capturedTitle = title();
+          const edInst = editorInstance();
+          const capturedContent = edInst && !edInst.isDestroyed ? edInst.getHTML() : content();
+          const isContentBlank =
+            edInst && !edInst.isDestroyed
+              ? edInst.isEmpty || edInst.getText().trim() === ''
+              : capturedContent.trim() === '';
+          if (capturedTitle.trim() !== '' || !isContentBlank) {
+            log.info(`cleanup: saving entry id=${newEntry.id} created during lock-race`);
+            await saveEntry(newEntry.id, capturedTitle, capturedContent);
+          } else {
+            log.info(`cleanup: deleting blank ghost entry id=${newEntry.id} from lock-race`);
+            await deleteEntryIfEmpty(newEntry.id, '', '');
+          }
+        } catch (err) {
+          log.warn('cleanup: could not save/delete in-flight entry during lock:', err);
+        }
+        // pendingEntryId may be non-null by now (IIFE's .then() ran first on the same Promise);
+        // return to prevent a redundant second save via saveCurrentById below
+        return;
+      }
+
+      // Normal path: flush any unsaved content for the current entry
       const currentId = pendingEntryId();
       if (currentId !== null) {
         const edInst = editorInstance();
@@ -461,14 +565,14 @@ export default function EditorPanel() {
         addDisabled={isCreatingEntry() || pendingEntryId() === null || isContentEmpty()}
         addTitle={
           isCreatingEntry()
-            ? 'Creating entry…'
+            ? t('editor.addEntryCreating')
             : pendingEntryId() === null || isContentEmpty()
-              ? 'Write something first to add another entry for this day'
-              : 'Add another entry for this day'
+              ? t('editor.addEntryHint')
+              : t('editor.addEntryTitle')
         }
         onDelete={handleDeleteEntry}
         deleteDisabled={isCreatingEntry() || dayEntries().length <= 1}
-        deleteTitle="Delete entry"
+        deleteTitle={t('editor.deleteEntry')}
       />
       <div class="flex-1 overflow-y-auto p-6">
         <div class="mx-auto w-full max-w-3xl xl:max-w-5xl 2xl:max-w-6xl">
@@ -478,7 +582,7 @@ export default function EditorPanel() {
                 value={title()}
                 onInput={handleTitleInput}
                 onEnter={handleTitleEnter}
-                placeholder="Title (optional)"
+                placeholder={t('editor.titleOptionalPlaceholder')}
                 spellCheck={preferences().enableSpellcheck}
               />
               <Show when={preferences().showEntryTimestamps}>
@@ -486,11 +590,18 @@ export default function EditorPanel() {
                   {(entry) => (
                     <div class="flex flex-wrap gap-x-4 gap-y-0.5">
                       <p class="text-xs text-tertiary">
-                        Created: {formatTimestamp(entry().date_created)}
+                        {t('editor.timestampCreated', {
+                          timestamp: formatTimestamp(entry().date_created, preferences().language),
+                        })}
                       </p>
                       <Show when={entry().date_updated !== entry().date_created}>
                         <p class="text-xs text-tertiary">
-                          Updated: {formatTimestamp(entry().date_updated)}
+                          {t('editor.timestampUpdated', {
+                            timestamp: formatTimestamp(
+                              entry().date_updated,
+                              preferences().language,
+                            ),
+                          })}
                         </p>
                       </Show>
                     </div>
@@ -508,24 +619,44 @@ export default function EditorPanel() {
                 // untrack() prevents signal reads from being tracked by DiaryEditor's effect.
                 if (isEmpty) {
                   const id = untrack(pendingEntryId);
-                  if (id !== null) {
+                  // Skip the auto-delete debounce for freshly created entries — see justCreatedEntryId
+                  // comment above. For blank entries loaded from DB (e.g. on navigation or date reload),
+                  // justCreatedEntryId is null/mismatched and the debounce fires normally.
+                  if (id !== null && id !== justCreatedEntryId) {
                     debouncedSave(id, untrack(title), untrack(content));
                   }
                 }
               }}
-              placeholder="What's on your mind today?"
+              placeholder={t('editor.editorPlaceholder')}
               onEditorReady={setEditorInstance}
               spellCheck={preferences().enableSpellcheck}
+              onImportMarkdown={handleImportMarkdown}
             />
           </div>
         </div>
       </div>
 
+      {/* Import markdown error banner */}
+      <Show when={importError()}>
+        <div class="px-6 pt-2">
+          <div role="alert" class="rounded-md bg-error p-3 flex items-center justify-between gap-2">
+            <p class="text-sm text-error">{importError()}</p>
+            <button
+              onClick={() => setImportError(null)}
+              class="text-sm text-error hover:opacity-75 flex-shrink-0"
+              aria-label={t('common.close')}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      </Show>
+
       {/* Footer with word count and save status */}
       <div class="border-t border-primary bg-tertiary px-6 py-2">
         <div class="flex items-center justify-between">
           <WordCount count={wordCount()} />
-          {isSaving() && <p class="text-sm text-tertiary">Saving...</p>}
+          {isSaving() && <p class="text-sm text-tertiary">{t('editor.saving')}</p>}
         </div>
       </div>
     </div>

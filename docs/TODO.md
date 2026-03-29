@@ -14,15 +14,16 @@ TODO entry format:
 
 ## High Priority
 
+- [ ] **Auto-delete race on newly-created blank entry** — `addEntry()` calls `debouncedSave.cancel()` synchronously, but DiaryEditor's `createEffect` (which calls `editor.commands.setContent('')` and fires the `onSetContent` callback) runs as a SolidJS microtask — i.e. **after** `cancel()` has already returned. The `onSetContent(isEmpty=true)` handler then queues `debouncedSave(entry2.id, '', '')` on a fresh 500 ms timer that was never cancelled. If the user doesn't type within that window the debounce fires, `saveCurrentById` sees an empty title + empty body, and deletes the newly-created entry. Manifests as the `multi-entry` E2E Scenario A failing ("both entries should survive lock/unlock") when the title-only second entry disappears. This is a different race from the `pendingEntryId === null` case fixed in `30e1c17` (which covered fresh-date first-keystroke). Fix: distinguish "freshly created entry awaiting first input" from "blank entry loaded from DB that should be cleaned up" — e.g. a `justCreatedEntryId` ref that suppresses the auto-delete debounce in `onSetContent` until the first real keystroke clears it
 
 ---
 
 ## Medium Priority
 
 - [ ] **Restore CI diagram content-diff check** — the byte-comparison check in `scripts/verify-diagrams.mjs` was reverted to existence-only because mmdc/d2 produce slightly different SVG bytes depending on version (local vs CI runners differ). The proper fix is to pin identical tool versions in both CI and local dev (e.g. lock `@mermaid-js/mermaid-cli` in `devDependencies` and `d2` via a specific release download in CI), then re-add the byte comparison. Until then, `diagrams:check` only verifies that all 8 `.svg` files are present.
-- [ ] **i18n framework** — detect OS locale, set up translation files (`en.json`, `es.json`), add `t()` helper
-  - [ ] **Translate all UI text** — replace hardcoded strings with translation keys (~145 keys); depends on i18n framework above
 - [ ] **Frontend test coverage** — auth screens (`PasswordPrompt.tsx`, `PasswordCreation.tsx`), Calendar, and all overlays (GoToDateOverlay, PreferencesOverlay, StatsOverlay, ImportOverlay, ExportOverlay) have zero test coverage; add Vitest + @solidjs/testing-library tests for each; use existing pattern from `TitleEditor.test.tsx` and `WordCount.test.tsx`
+- [ ] **Full image drag-and-drop support** — dropping images into the editor should work consistently both from file managers and from other applications (for example browsers, chat apps, or image editors), not only when the drag payload exposes file paths; image drops should embed the image the same way as the toolbar picker and paste flow, while unsupported payloads fail safely without breaking the editor
+  - [ ] **First compatibility target: Typora** — validate and support dragging images from Typora into Mini Diarium as the first cross-application drag-and-drop case before widening compatibility to other apps
 - [ ] **`screen_lock.rs` unit tests** — the Windows session-lock hook is untested because it calls Win32 APIs directly; extract `trigger_auto_lock` and test it with a mock `DiaryState`; requires Win32 API mocking strategy.
 
 ---
@@ -37,7 +38,6 @@ TODO entry format:
 ---
 
 ## Low Priority / Future
-- [x] **Markdown export image handling** (2026-03-25) — embedded base64 images in entry HTML are currently written as inline `data:` URIs in the exported Markdown, making files very large and unreadable in most Markdown editors; export should extract images to a sibling `assets/` folder and replace `<img src="data:...">` tags with relative `![](assets/image-N.ext)` Markdown references; the export command is in `src-tauri/src/export/markdown.rs`
 - [ ] **PDF export** — convert journal entries to PDF (A4); likely via Tauri webview printing
 - [ ] **Text input extension point** — create a plugin/extension interface for alternative entry methods so official and user plugins can provide text input flows such as dictation, LLM-assisted drafting, and other future capture modes; define capability boundaries, permission model, and how plugins hand content into the editor without weakening the app’s privacy guarantees
 - [ ] **Statistics extension point** — add a plugin/extension interface for writing statistics so official and user plugins can calculate custom metrics and surface them in the statistics UI; define the data contract, execution/sandbox constraints, and how custom statistics are registered and rendered without weakening the app’s privacy-first local-only model

@@ -19,6 +19,7 @@ interface DiaryEditorProps {
   placeholder?: string;
   onEditorReady?: (editor: Editor) => void;
   spellCheck?: boolean;
+  onImportMarkdown?: () => void;
 }
 
 // Core: resize a data URL via canvas and insert at the current cursor position.
@@ -239,6 +240,21 @@ export default function DiaryEditor(props: DiaryEditorProps) {
     }
   });
 
+  // Update TipTap Placeholder extension when props.placeholder changes (e.g. locale switch).
+  // The editor is created once in onMount with the initial placeholder value; after that,
+  // prop changes must be applied by mutating the extension options and dispatching a no-op
+  // transaction so ProseMirror re-runs its decoration pass.
+  createEffect(() => {
+    const newPlaceholder = props.placeholder;
+    const editorInstance = editor();
+    if (!editorInstance || editorInstance.isDestroyed) return;
+    const ext = editorInstance.extensionManager.extensions.find((e) => e.name === 'placeholder');
+    if (ext) {
+      ext.options.placeholder = newPlaceholder;
+      editorInstance.view.dispatch(editorInstance.state.tr);
+    }
+  });
+
   onCleanup(() => {
     editor()?.destroy();
     unlistenDragDrop?.();
@@ -258,6 +274,7 @@ export default function DiaryEditor(props: DiaryEditorProps) {
               console.error('[mini-diarium] image embed failed:', err),
             );
         }}
+        onImportMarkdown={props.onImportMarkdown}
       />
       <div class="p-4">
         <div ref={editorElement} />
