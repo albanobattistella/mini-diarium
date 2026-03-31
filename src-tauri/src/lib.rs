@@ -42,6 +42,13 @@ fn is_e2e_mode() -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Disable DMA-BUF renderer on Linux to avoid WebKit rendering issues
+    // (white screen / GPU reset) on some drivers. Must be set before GTK init.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("mini_diarium_lib=info"),
     )

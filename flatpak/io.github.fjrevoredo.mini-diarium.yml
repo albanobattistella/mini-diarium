@@ -1,6 +1,6 @@
 app-id: io.github.fjrevoredo.mini-diarium
 runtime: org.gnome.Platform
-runtime-version: '47'
+runtime-version: '50'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -8,13 +8,16 @@ sdk-extensions:
 command: mini-diarium
 
 finish-args:
-  - --share=ipc
-  - --socket=fallback-x11
+  # Display
   - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # WebKitGTK requires network access for proxy resolution via the portal.
+  # The app itself never makes network requests.
+  - --share=network
+  # GPU rendering (WebKit2GTK requires hardware acceleration)
   - --device=dri
-  # The journal directory is user-configurable via change_diary_directory and can be set to any
-  # path on the filesystem. Restricting to xdg-documents would silently break multi-journal setups
-  # and any existing journal location configured by the user.
+  # Filesystem access (journal directory is user-configurable)
   - --filesystem=home
 
 modules:
@@ -22,12 +25,13 @@ modules:
     buildsystem: simple
     build-options:
       append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
-      env:
-        CARGO_HOME: /run/build/mini-diarium/cargo
-        npm_config_cache: /run/build/mini-diarium/npm-cache
+    env:
+      CARGO_HOME: /run/build/mini-diarium/cargo
+      npm_config_cache: /run/build/mini-diarium/flatpak-node/npm-cache
+      npm_config_offline: 'true'
     build-commands:
       # 1. Install pre-vendored node deps (offline, sourced from node-sources.json)
-      - npm ci --offline
+      - npm ci --offline --legacy-peer-deps
       # 2. Build frontend → dist/   (package.json "build" script = "vite build")
       - npm run build
       # 3. Build Rust binary — Tauri's build.rs (tauri_build::build()) reads tauri.conf.json,
@@ -45,7 +49,9 @@ modules:
     sources:
       - type: git
         url: https://github.com/fjrevoredo/mini-diarium
-        tag: v0.4.14
-        commit: 80bb8dfa60f71673ada4cc78e1541745c6731137
+        # Testing with HEAD — update tag/commit for release builds
+        commit: dc82512dcc2886ee29719cc885bd9b1aaf0c3854
       - node-sources.json
       - cargo-sources.json
+      - type: file
+        path: ../package-lock.json

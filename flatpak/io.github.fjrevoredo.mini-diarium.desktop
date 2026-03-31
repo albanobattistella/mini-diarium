@@ -4,6 +4,6 @@ Comment=An encrypted, local-first desktop journaling app
 Exec=mini-diarium
 Icon=io.github.fjrevoredo.mini-diarium
 Type=Application
-Categories=Productivity;Office;
+Categories=Office;
 Keywords=journal;diary;encrypted;notes;private;
 StartupWMClass=Mini Diarium

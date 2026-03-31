@@ -57,8 +57,8 @@ jobs:
 
       - name: Install flatpak-builder-tools
         run: |
-          pip install aiohttp toml
           git clone --depth=1 https://github.com/flatpak/flatpak-builder-tools.git /tmp/flatpak-builder-tools
+          pip install aiohttp toml tomlkit /tmp/flatpak-builder-tools/node
 
       - name: Generate cargo-sources.json
         run: |
@@ -72,13 +72,11 @@ jobs:
         # a compatible package-lock.json (network call to resolve metadata only).
         run: |
           bun install --frozen-lockfile
-          npm install --package-lock-only --ignore-scripts
+          npm install --package-lock-only --ignore-scripts --legacy-peer-deps
 
       - name: Generate node-sources.json
         run: |
-          python3 /tmp/flatpak-builder-tools/node/flatpak-node-generator.py npm \
-            package-lock.json \
-            -o flatpak/node-sources.json
+          flatpak-node-generator npm package-lock.json -o flatpak/node-sources.json
 
       - name: Get commit SHA for tag
         id: sha
@@ -121,6 +119,7 @@ jobs:
           cp flatpak/io.github.fjrevoredo.mini-diarium.desktop      /tmp/flathub-repo/io.github.fjrevoredo.mini-diarium.desktop
           cp flatpak/cargo-sources.json           /tmp/flathub-repo/cargo-sources.json
           cp flatpak/node-sources.json            /tmp/flathub-repo/node-sources.json
+          cp package-lock.json                   /tmp/flathub-repo/package-lock.json
 
       - name: Commit and open PR against Flathub repo
         env:
