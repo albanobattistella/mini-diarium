@@ -173,6 +173,7 @@ Before rerunning `flatpak-builder` after dependency changes, regenerate the sour
 | `npm ERR! ENOTCACHED`              | `package-lock.json` or `node-sources.json` is stale | Regenerate both from Step 3                                                  |
 | `Requested extension ... /50 not installed` | Wrong SDK extension branch for GNOME 50 | Install `org.freedesktop.Sdk.Extension.rust-stable//25.08` and `org.freedesktop.Sdk.Extension.node20//25.08` |
 | `perhaps a crate was updated and forgotten to be re-vendored?` | `cargo-sources.json` is stale | Regenerate with `flatpak-cargo-generator.py`                                 |
+| App launches with `Could not connect to localhost: Connection refused` | Tauri release binary was built without `custom-protocol` | Ensure the manifest builds with `cargo build --release --features custom-protocol --manifest-path src-tauri/Cargo.toml` |
 | Rust `E0*` compile errors          | Outdated `rust-stable` SDK extension | Update extension: `flatpak update org.freedesktop.Sdk.Extension.rust-stable` |
 | `WebKitGTK` missing                | Wrong runtime version                | Ensure `org.gnome.Platform//50` is installed                                 |
 | Desktop validation warning about `Productivity;Office;` | Old Tauri category leaked into generated desktop metadata | Ensure `src-tauri/tauri.conf.json` uses `"category": "Office"` and rebuild from the current checkout |

@@ -50,6 +50,9 @@
 
   <releases>
     <!-- Automation prepends a new <release> entry here on each publish via flathub-publish.yml -->
+    <release version="0.4.15" date="2026-04-04">
+      <url type="details">https://github.com/fjrevoredo/mini-diarium/releases/tag/v0.4.15</url>
+    </release>
   </releases>
 
   <content_rating type="oars-1.1" />

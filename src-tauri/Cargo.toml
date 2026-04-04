@@ -49,6 +49,12 @@ env_logger = "0.11.10"
 opt-level = 3
 lto = true
 
+[features]
+# Production builds outside the Tauri CLI must enable this so the app loads
+# embedded frontend assets instead of trying the dev server URL.
+default = []
+custom-protocol = ["tauri/custom-protocol"]
+
 [dev-dependencies]
 tempfile = "3"
 criterion = { version = "0.8.2", features = ["html_reports"] }
