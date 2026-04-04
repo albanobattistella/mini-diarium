@@ -25,10 +25,10 @@ modules:
     buildsystem: simple
     build-options:
       append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
-    env:
-      CARGO_HOME: /run/build/mini-diarium/cargo
-      npm_config_cache: /run/build/mini-diarium/flatpak-node/npm-cache
-      npm_config_offline: 'true'
+      env:
+        CARGO_HOME: /run/build/mini-diarium/cargo
+        npm_config_cache: /run/build/mini-diarium/flatpak-node/npm-cache
+        npm_config_offline: 'true'
     build-commands:
       # 1. Install pre-vendored node deps (offline, sourced from node-sources.json)
       - npm ci --offline --legacy-peer-deps
@@ -47,10 +47,10 @@ modules:
       - install -Dm644 src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/io.github.fjrevoredo.mini-diarium.png
       - install -Dm644 flatpak/io.github.fjrevoredo.mini-diarium.metainfo.xml /app/share/metainfo/io.github.fjrevoredo.mini-diarium.metainfo.xml
     sources:
-      - type: git
-        url: https://github.com/fjrevoredo/mini-diarium
-        # Testing with HEAD — update tag/commit for release builds
-        commit: dc82512dcc2886ee29719cc885bd9b1aaf0c3854
+      - type: dir
+        # Local step-4 builds should use the current checkout so Flatpak validation
+        # exercises the exact files you are editing, not an older pushed commit.
+        path: ..
       - node-sources.json
       - cargo-sources.json
       - type: file

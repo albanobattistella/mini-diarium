@@ -324,7 +324,7 @@ When the release workflow publishes a release, the `flathub-publish.yml` workflo
 
 ✅ Generates `cargo-sources.json` from `src-tauri/Cargo.lock` (offline Cargo deps for the Flatpak sandbox)
 ✅ Derives a `package-lock.json` from the Bun lockfile and generates `node-sources.json` (offline npm deps)
-✅ Updates the manifest `flatpak/io.github.fjrevoredo.mini-diarium.yml` with the release tag and commit SHA
+✅ Rewrites the local-test manifest `flatpak/io.github.fjrevoredo.mini-diarium.yml` to a pinned git source for the release commit and rewrites the `package-lock.json` source path for the Flathub repo layout
 ✅ Prepends a new `<release>` entry to `flatpak/io.github.fjrevoredo.mini-diarium.metainfo.xml`
 ✅ Clones `flathub/io.github.fjrevoredo.mini-diarium`, copies all updated files, and opens a PR
 
@@ -339,7 +339,8 @@ When the release workflow publishes a release, the `flathub-publish.yml` workflo
 2. Wait for Flathub maintainers to review and merge the PR (same process as WinGet)
 3. Users can then install with: `flatpak install flathub io.github.fjrevoredo.mini-diarium`
 
-**Annual maintenance:** `org.gnome.Platform//47` in `flatpak/io.github.fjrevoredo.mini-diarium.yml` must be bumped each major GNOME release (approximately annually). Update it before the first release of the year when GNOME ships a new major version.
+**Annual maintenance:** `org.gnome.Platform//50` in `flatpak/io.github.fjrevoredo.mini-diarium.yml` must be bumped each major GNOME release (approximately annually). Update it before the first release of the year when GNOME ships a new major version.
+When this runtime is bumped, the `sdk-extensions` branches must also be checked against the matching GNOME SDK metadata. For the current `org.gnome.Sdk//50`, the matching Freedesktop extension branch is `25.08`.
 
 ---
 
@@ -361,7 +362,7 @@ git clone --depth=1 https://github.com/flatpak/flatpak-builder-tools.git
 python3 flatpak-builder-tools/cargo/flatpak-cargo-generator.py src-tauri/Cargo.lock -o flatpak/cargo-sources.json
 
 bun install --frozen-lockfile
-npm install --package-lock-only --ignore-scripts
+npm install --package-lock-only --ignore-scripts --legacy-peer-deps
 python3 flatpak-builder-tools/node/flatpak-node-generator.py npm package-lock.json -o flatpak/node-sources.json
 
 flatpak-builder --user --install --force-clean build-dir flatpak/io.github.fjrevoredo.mini-diarium.yml

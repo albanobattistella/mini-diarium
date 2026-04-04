@@ -90,12 +90,31 @@ jobs:
           fi
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
-      - name: Update manifest tag and commit
+      - name: Rewrite manifest for Flathub repo layout
         run: |
-          tag="${{ steps.prep.outputs.tag }}"
           commit="${{ steps.sha.outputs.commit }}"
-          sed -i "s|tag: .*|tag: ${tag}|" flatpak/io.github.fjrevoredo.mini-diarium.yml
-          sed -i "s|commit: .*|commit: ${commit}|" flatpak/io.github.fjrevoredo.mini-diarium.yml
+          python3 - <<'PY'
+from pathlib import Path
+
+manifest = Path("flatpak/io.github.fjrevoredo.mini-diarium.yml")
+text = manifest.read_text()
+
+local_block = """      - type: dir
+        # Local step-4 builds should use the current checkout so Flatpak validation
+        # exercises the exact files you are editing, not an older pushed commit.
+        path: .."""
+
+remote_block = """      - type: git
+        url: https://github.com/fjrevoredo/mini-diarium
+        commit: __COMMIT__"""
+
+text = text.replace(local_block, remote_block)
+text = text.replace("path: ../package-lock.json", "path: package-lock.json")
+
+manifest.write_text(text.replace("__COMMIT__", commit))
+PY
+          # In this repo the manifest lives under flatpak/ and references ../package-lock.json.
+          # In the Flathub repo the manifest is copied to the repo root beside package-lock.json.
 
       - name: Prepend release entry to metainfo.xml
         run: |
