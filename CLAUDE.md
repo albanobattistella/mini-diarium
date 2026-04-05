@@ -15,6 +15,7 @@ For domain-specific conventions, gotchas, and checklists, see:
 - [Backend (src-tauri/)](src-tauri/CLAUDE.md) — Tauri commands, Rust patterns, plugins, security, search implementation
 - [E2E (e2e/)](e2e/CLAUDE.md) — WebdriverIO, tauri-driver, viewport rules, E2E mode contracts
 - [Benchmarks (benchmarks/)](benchmarks/CLAUDE.md) — criterion, Vitest bench, CI tracking, gotchas
+- [Website (website/)](website/CLAUDE.md) — blog post workflow, generator script, content strategy, file layout
 
 ## Architecture
 
@@ -62,8 +63,9 @@ Quick reference (ASCII art):
 
 ## Website (`website/`)
 
-Static marketing site — plain HTML/CSS/JS, no build step. Deploy via Coolify using `website/docker-compose.yml`.
+Static marketing site — plain HTML/CSS/JS. Deploy via Coolify using `website/docker-compose.yml`.
 **Version sync:** `bump-version.sh` updates `<span class="app-version">` in `website/index.html`. Always commit it alongside version files.
+**Blog posts:** Write `posts-src/YYYY-MM-DD-slug.md`, then run `bun run website:blog`. Never hand-craft HTML in `blog/`. See [website/CLAUDE.md](website/CLAUDE.md) for the full workflow.
 
 ## Command Registry
 

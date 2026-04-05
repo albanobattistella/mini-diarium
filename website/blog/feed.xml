@@ -5,7 +5,14 @@
     <link>https://mini-diarium.com/blog/</link>
     <description>Static articles about encrypted journals, private diary apps, offline journaling, and local-first software.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 25 Mar 2026 00:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 05 Apr 2026 00:00:00 GMT</lastBuildDate>
+  <item>
+    <title>Mini Diary Alternative: A Private Offline Desktop Journal</title>
+    <link>https://mini-diarium.com/blog/mini-diary-alternative/</link>
+    <guid isPermaLink="true">https://mini-diarium.com/blog/mini-diary-alternative/</guid>
+    <description>Looking for a Mini Diary alternative? Mini Diarium is the maintained successor — same local-first philosophy, rebuilt with encryption and a modern stack, with direct import from Mini Diary JSON.</description>
+    <pubDate>Sun, 05 Apr 2026 00:00:00 GMT</pubDate>
+  </item>
   <item>
     <title>Journal App Without Cloud: What Actually Matters</title>
     <link>https://mini-diarium.com/blog/journal-app-without-cloud/</link>
