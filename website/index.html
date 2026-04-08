@@ -31,7 +31,6 @@
 
   <title>Mini Diarium — Encrypted Journal App for Windows, macOS &amp; Linux</title>
   <link rel="canonical" href="https://mini-diarium.com/" />
-  <link rel="preload" as="video" href="/assets/demo.mp4" type="video/mp4" fetchpriority="high" />
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
   <link rel="icon" href="favicon.ico" sizes="any" />
   <link rel="icon" href="favicon-16x16.png" type="image/png" sizes="16x16" />
@@ -81,8 +80,7 @@
     @media (max-width:900px){.hero-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media (max-width:768px){.nav-links{display:none}.nav-toggle{display:block;background:none;border:none;cursor:pointer;padding:.5rem;color:var(--text);margin-left:auto}.hero-facts{grid-template-columns:1fr}}
   </style>
-  <link rel="preload" href="/css/style.15f7be9f.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-  <noscript><link rel="stylesheet" href="/css/style.15f7be9f.css" /></noscript>
+  <link rel="stylesheet" href="/css/style.15f7be9f.css" />
 
   <script type="application/ld+json">
   {
@@ -296,7 +294,7 @@
       for the short version of how Mini Diarium handles privacy, storage, and ownership.
     </p>
     <a class="hero-sourceforge" href="https://sourceforge.net/projects/mini-diarium/files/latest/download" data-nosnippet>
-      <img alt="Download Mini-Diarium" src="https://a.fsdn.com/con/app/sf-download-button" width="276" height="48" srcset="https://a.fsdn.com/con/app/sf-download-button?button_size=2x 2x" />
+      <img alt="Download Mini-Diarium" src="https://a.fsdn.com/con/app/sf-download-button" width="276" height="48" srcset="https://a.fsdn.com/con/app/sf-download-button?button_size=2x 2x" loading="lazy" />
     </a>
     <p class="hero-source" data-nosnippet>Free &amp; open source · MIT License · No account required</p>
   </div>
@@ -312,7 +310,7 @@
         <div class="demo-dot demo-dot-max"></div>
         <div class="demo-title">Mini Diarium</div>
       </div>
-      <video class="demo-media" autoplay loop muted playsinline preload="auto" fetchpriority="high" poster="assets/demo-poster.png" width="720" height="540" aria-label="Mini Diarium in action: calendar navigation, rich text editor, and encrypted entry saving">
+      <video class="demo-media" autoplay loop muted playsinline preload="metadata" poster="assets/demo-poster.png" width="720" height="540" aria-label="Mini Diarium in action: calendar navigation, rich text editor, and encrypted entry saving">
         <source src="assets/demo.mp4" type="video/mp4" />
         <source src="assets/demo.webm" type="video/webm" />
         <img src="assets/demo-poster.png" alt="Mini Diarium in action: calendar navigation, rich text editor, and encrypted entry saving" width="720" height="540" />

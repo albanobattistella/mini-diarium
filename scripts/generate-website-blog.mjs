@@ -281,8 +281,7 @@ function buildHead({
   <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
   <link rel="icon" href="/favicon-128x128.png" type="image/png" sizes="128x128" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
-  <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-  <noscript><link rel="stylesheet" href="/css/style.css" /></noscript>
+  <link rel="stylesheet" href="/css/style.css" />
   <script type="application/ld+json">
 ${JSON.stringify(structuredData, null, 2)}
   </script>
