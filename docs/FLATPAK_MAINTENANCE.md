@@ -166,7 +166,7 @@ Typical generation commands:
 
 ```bash
 python3 /path/to/flatpak-builder-tools/cargo/flatpak-cargo-generator.py src-tauri/Cargo.lock -o flatpak/cargo-sources.json
-flatpak-node-generator npm package-lock.json -o flatpak/node-sources.json
+node flatpak/generate-node-sources.mjs package-lock.json flatpak/node-sources.json "$HOME/.npm"
 ```
 
 4. Build locally with:
@@ -192,6 +192,29 @@ When preparing a Flathub update:
 3. Regenerate vendored dependency sources from the current lockfiles.
 4. Do not carry Flathub-only patches unless the upstream fix is impossible or still pending review.
 5. If a temporary Flathub-only patch is needed, remove it as soon as the upstream fix is merged and the manifest can point at the new commit.
+
+### Required GitHub Secret: `FLATHUB_TOKEN`
+
+The release workflow pushes a branch to `flathub/io.github.fjrevoredo.mini-diarium` and then opens a PR. That token is stored in the `mini-diarium` GitHub repository as the Actions secret `FLATHUB_TOKEN`.
+
+Setup steps:
+
+1. Create a GitHub personal access token on an account that has write access to `flathub/io.github.fjrevoredo.mini-diarium`.
+2. In `fjrevoredo/mini-diarium`, go to `Settings -> Secrets and variables -> Actions`.
+3. Add a new repository secret named `FLATHUB_TOKEN`.
+4. Re-run the `Publish to Flathub` workflow after saving the secret.
+
+Token type guidance:
+
+- Safest practical choice for this repo: a classic personal access token with `public_repo`.
+- Reason: the target Flathub repository is public, and GitHub still documents that fine-grained tokens do not support contributing as an outside collaborator or repository collaborator.
+- If the account is an actual member of the `flathub` organization and fine-grained access works, scope it to `flathub/io.github.fjrevoredo.mini-diarium` with repository permissions `Contents: write` and `Pull requests: write`.
+
+Failure signature when missing:
+
+| Error | Meaning |
+| --- | --- |
+| `FLATHUB_TOKEN secret is not set.` | The release workflow cannot clone, push to, or open a PR against the Flathub repo. |
 
 ## Runtime And Permission Changes
 

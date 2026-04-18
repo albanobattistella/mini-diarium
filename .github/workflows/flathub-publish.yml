@@ -51,7 +51,23 @@ jobs:
       - name: Install flatpak-builder-tools
         run: |
           git clone --depth=1 https://github.com/flatpak/flatpak-builder-tools.git /tmp/flatpak-builder-tools
-          pip install aiohttp toml tomlkit /tmp/flatpak-builder-tools/node
+          pip install aiohttp toml tomlkit
+
+      - name: Validate package-lock.json for offline npm
+        run: |
+          if ! grep -q '"resolved"' package-lock.json; then
+            echo "package-lock.json is missing resolved URLs."
+            echo "Regenerate it with real npm, not Bun's npm shim:"
+            echo "npm install --package-lock-only --ignore-scripts --legacy-peer-deps"
+            exit 1
+          fi
+
+          if ! grep -q '"integrity"' package-lock.json; then
+            echo "package-lock.json is missing integrity hashes."
+            echo "Regenerate it with real npm, not Bun's npm shim:"
+            echo "npm install --package-lock-only --ignore-scripts --legacy-peer-deps"
+            exit 1
+          fi
 
       - name: Generate cargo-sources.json
         run: |
@@ -61,7 +77,7 @@ jobs:
 
       - name: Generate node-sources.json
         run: |
-          flatpak-node-generator npm package-lock.json -o flatpak/node-sources.json
+          node flatpak/generate-node-sources.mjs package-lock.json flatpak/node-sources.json "$HOME/.npm"
 
       - name: Get commit SHA for tag
         id: sha

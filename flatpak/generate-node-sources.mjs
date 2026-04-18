@@ -1,0 +1,268 @@
+#!/usr/bin/env node
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import https from 'node:https';
+import path from 'node:path';
+
+const [lockfilePath, outputPath, npmCachePath] = process.argv.slice(2);
+
+if (!lockfilePath || !outputPath || !npmCachePath) {
+  console.error('Usage: node generate-node-sources.mjs <package-lock.json> <output.json> <npm-cache-dir>');
+  process.exit(1);
+}
+
+const archMap = new Map([
+  ['@esbuild/linux-arm', 'arm'],
+  ['@esbuild/linux-arm64', 'aarch64'],
+  ['@esbuild/linux-ia32', 'i386'],
+  ['@esbuild/linux-x64', 'x86_64'],
+]);
+
+function decodeIntegrity(integrity) {
+  const [algorithm, base64] = integrity.split('-', 2);
+  if (!algorithm || !base64) {
+    throw new Error(`Unsupported integrity format: ${integrity}`);
+  }
+
+  return {
+    algorithm,
+    hex: Buffer.from(base64, 'base64').toString('hex'),
+  };
+}
+
+function getIndexRecord(npmCachePathValue, key, resolved, integrity, contentSize) {
+  const sha1 = crypto.createHash('sha1').update(key).digest('hex');
+  const filePath = path.join(
+    npmCachePathValue,
+    '_cacache',
+    'index-v5',
+    sha1.slice(0, 2),
+    sha1.slice(2, 4),
+    sha1.slice(4),
+  );
+
+  if (fs.existsSync(filePath)) {
+    const contents = fs.readFileSync(filePath, 'utf8');
+    const lines = contents.trim().split('\n');
+    const needle = `"key":"${key}"`;
+    const match = lines.findLast((line) => line.includes(needle));
+    if (match) {
+      return { sha1, contents: match };
+    }
+  }
+
+  const json = JSON.stringify({
+    key,
+    integrity,
+    time: 0,
+    size: contentSize,
+    metadata: {
+      url: resolved,
+      reqHeaders: {},
+      resHeaders: {},
+    },
+  });
+  const entryHash = crypto.createHash('sha1').update(json).digest('hex');
+
+  return { sha1, contents: `${entryHash}\t${json}` };
+}
+
+function getContentSizeFromUrl(url, redirectCount = 0, method = 'HEAD') {
+  if (redirectCount > 10) {
+    return Promise.reject(new Error(`Too many redirects while fetching headers for ${url}`));
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = https.request(url, { method }, (response) => {
+      const statusCode = response.statusCode ?? 0;
+      const location = response.headers.location;
+
+      if (statusCode >= 300 && statusCode < 400 && location) {
+        response.resume();
+        const nextUrl = new URL(location, url).toString();
+        resolve(getContentSizeFromUrl(nextUrl, redirectCount + 1, method));
+        return;
+      }
+
+      if (statusCode < 200 || statusCode >= 300) {
+        response.resume();
+        reject(new Error(`Unexpected status ${statusCode} while fetching headers for ${url}`));
+        return;
+      }
+
+      const contentLength = response.headers['content-length'];
+      if (contentLength) {
+        response.resume();
+        const size = Number.parseInt(contentLength, 10);
+        if (!Number.isFinite(size) || size < 0) {
+          reject(new Error(`Invalid content-length ${contentLength} for ${url}`));
+          return;
+        }
+
+        resolve(size);
+        return;
+      }
+
+      if (method === 'HEAD') {
+        response.resume();
+        resolve(getContentSizeFromUrl(url, redirectCount, 'GET'));
+        return;
+      }
+
+      let size = 0;
+      response.on('data', (chunk) => {
+        size += chunk.length;
+      });
+      response.on('end', () => {
+        resolve(size);
+      });
+      response.on('error', reject);
+    });
+
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function getContentSize(item, contentFilePath, sizeCache) {
+  if (fs.existsSync(contentFilePath)) {
+    return fs.statSync(contentFilePath).size;
+  }
+
+  if (!sizeCache.has(item.resolved)) {
+    sizeCache.set(item.resolved, getContentSizeFromUrl(item.resolved));
+  }
+
+  return sizeCache.get(item.resolved);
+}
+
+const lock = JSON.parse(fs.readFileSync(lockfilePath, 'utf8'));
+const packages = lock.packages ?? {};
+
+const normalEntries = new Map();
+const esbuildEntries = new Map();
+
+for (const [pkgPath, pkg] of Object.entries(packages)) {
+  if (!pkgPath.startsWith('node_modules/')) {
+    continue;
+  }
+
+  const resolved = pkg.resolved;
+  const integrity = pkg.integrity;
+  if (!resolved || !integrity) {
+    continue;
+  }
+
+  const packageName = pkgPath.slice('node_modules/'.length);
+  const key = `${resolved} ${integrity}`;
+  const item = {
+    packageName,
+    version: pkg.version,
+    resolved,
+    integrity,
+  };
+
+  if (archMap.has(packageName)) {
+    esbuildEntries.set(packageName, item);
+  } else if (!normalEntries.has(key)) {
+    normalEntries.set(key, item);
+  }
+}
+
+const sources = [];
+const sizeCache = new Map();
+
+for (const packageName of archMap.keys()) {
+  const item = esbuildEntries.get(packageName);
+  if (!item) {
+    continue;
+  }
+
+  const decoded = decodeIntegrity(item.integrity);
+  if (decoded.algorithm !== 'sha512') {
+    throw new Error(`Unexpected integrity algorithm for ${packageName}: ${decoded.algorithm}`);
+  }
+
+  sources.push({
+    type: 'archive',
+    url: item.resolved,
+    'strip-components': 1,
+    sha512: decoded.hex,
+    dest: `flatpak-node/cache/esbuild/.package/${packageName}@${item.version}`,
+    'only-arches': [archMap.get(packageName)],
+  });
+}
+
+for (const item of normalEntries.values()) {
+  const decoded = decodeIntegrity(item.integrity);
+  if (decoded.algorithm !== 'sha512') {
+    throw new Error(`Unexpected integrity algorithm for ${item.packageName}: ${decoded.algorithm}`);
+  }
+
+  const key = `make-fetch-happen:request-cache:${item.resolved}`;
+  const contentFilePath = path.join(
+    npmCachePath,
+    '_cacache',
+    'content-v2',
+    'sha512',
+    decoded.hex.slice(0, 2),
+    decoded.hex.slice(2, 4),
+    decoded.hex.slice(4),
+  );
+  const contentSize = await getContentSize(item, contentFilePath, sizeCache);
+  const index = getIndexRecord(npmCachePath, key, item.resolved, item.integrity, contentSize);
+
+  sources.push({
+    type: 'file',
+    url: item.resolved,
+    sha512: decoded.hex,
+    'dest-filename': decoded.hex.slice(4),
+    dest: `flatpak-node/npm-cache/_cacache/content-v2/sha512/${decoded.hex.slice(0, 2)}/${decoded.hex.slice(2, 4)}`,
+  });
+
+  sources.push({
+    type: 'inline',
+    contents: index.contents,
+    'dest-filename': index.sha1.slice(4),
+    dest: `flatpak-node/npm-cache/_cacache/index-v5/${index.sha1.slice(0, 2)}/${index.sha1.slice(2, 4)}`,
+  });
+}
+
+sources.push({
+  type: 'script',
+  commands: [
+    'version=$(node --version | sed "s/^v//")',
+    'nodedir=$(dirname "$(dirname "$(which node)")")',
+    'mkdir -p "flatpak-node/cache/node-gyp/$version"',
+    'ln -s "$nodedir/include" "flatpak-node/cache/node-gyp/$version/include"',
+    'echo 11 > "flatpak-node/cache/node-gyp/$version/installVersion"',
+  ],
+  'dest-filename': 'setup_sdk_node_headers.sh',
+  dest: 'flatpak-node',
+});
+
+sources.push({
+  type: 'shell',
+  commands: ['bash flatpak-node/setup_sdk_node_headers.sh'],
+});
+
+for (const [packageName, onlyArch] of archMap.entries()) {
+  const item = esbuildEntries.get(packageName);
+  if (!item) {
+    continue;
+  }
+
+  const suffix = packageName.split('/')[1];
+  sources.push({
+    type: 'shell',
+    commands: [
+      'mkdir -p "bin/@esbuild"',
+      `cp ".package/${packageName}@${item.version}/bin/esbuild" "bin/${packageName}@${item.version}"`,
+      `ln -sf "@esbuild/${suffix}@${item.version}" "bin/esbuild-current"`,
+    ],
+    dest: 'flatpak-node/cache/esbuild',
+    'only-arches': [onlyArch],
+  });
+}
+
+fs.writeFileSync(outputPath, `${JSON.stringify(sources, null, 4)}\n`);
