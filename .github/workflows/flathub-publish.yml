@@ -29,6 +29,18 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Get commit SHA for tag
+        id: sha
+        run: |
+          # git rev-list dereferences annotated tags to their commit SHA.
+          # Full clone (fetch-depth: 0 + fetch-tags: true) ensures all tags are present.
+          commit=$(git rev-list -n 1 "${{ steps.prep.outputs.tag }}")
+          if [ -z "$commit" ]; then
+            echo "Could not resolve commit SHA for ${{ steps.prep.outputs.tag }}"
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
       - name: Verify FLATHUB_TOKEN secret is set
         run: |
           if [ -z "${{ secrets.FLATHUB_TOKEN }}" ]; then
@@ -53,16 +65,41 @@ jobs:
           git clone --depth=1 https://github.com/flatpak/flatpak-builder-tools.git /tmp/flatpak-builder-tools
           pip install aiohttp toml tomlkit
 
+      - name: Prepare tagged source tree
+        run: |
+          rm -rf /tmp/mini-diarium-release
+          git worktree add --detach /tmp/mini-diarium-release "${{ steps.sha.outputs.commit }}"
+
+      - name: Validate tagged metainfo for Flathub
+        run: |
+          metainfo=/tmp/mini-diarium-release/data/linux/io.github.fjrevoredo.mini-diarium.metainfo.xml
+
+          if ! grep -q '<developer id="io.github.fjrevoredo">' "$metainfo"; then
+            echo "Tagged release metainfo is missing <developer id=\"io.github.fjrevoredo\">."
+            echo "Flathub will reject this build during AppStream validation."
+            echo "Cut a new release after fixing data/linux/io.github.fjrevoredo.mini-diarium.metainfo.xml, or patch the Flathub PR manually."
+            exit 1
+          fi
+
+          if ! grep -q '<url type="vcs-browser">https://github.com/fjrevoredo/mini-diarium</url>' "$metainfo"; then
+            echo "Tagged release metainfo is missing the vcs-browser URL."
+            echo "Flathub will reject this build during AppStream validation."
+            echo "Cut a new release after fixing data/linux/io.github.fjrevoredo.mini-diarium.metainfo.xml, or patch the Flathub PR manually."
+            exit 1
+          fi
+
       - name: Validate package-lock.json for offline npm
         run: |
-          if ! grep -q '"resolved"' package-lock.json; then
+          lockfile=/tmp/mini-diarium-release/package-lock.json
+
+          if ! grep -q '"resolved"' "$lockfile"; then
             echo "package-lock.json is missing resolved URLs."
             echo "Regenerate it with real npm, not Bun's npm shim:"
             echo "npm install --package-lock-only --ignore-scripts --legacy-peer-deps"
             exit 1
           fi
 
-          if ! grep -q '"integrity"' package-lock.json; then
+          if ! grep -q '"integrity"' "$lockfile"; then
             echo "package-lock.json is missing integrity hashes."
             echo "Regenerate it with real npm, not Bun's npm shim:"
             echo "npm install --package-lock-only --ignore-scripts --legacy-peer-deps"
@@ -72,29 +109,21 @@ jobs:
       - name: Generate cargo-sources.json
         run: |
           python3 /tmp/flatpak-builder-tools/cargo/flatpak-cargo-generator.py \
-            src-tauri/Cargo.lock \
-            -o flatpak/cargo-sources.json
+            /tmp/mini-diarium-release/src-tauri/Cargo.lock \
+            -o /tmp/mini-diarium-release/flatpak/cargo-sources.json
 
       - name: Generate node-sources.json
         run: |
-          node flatpak/generate-node-sources.mjs package-lock.json flatpak/node-sources.json "$HOME/.npm"
-
-      - name: Get commit SHA for tag
-        id: sha
-        run: |
-          # git rev-list dereferences annotated tags to their commit SHA.
-          # Full clone (fetch-depth: 0 + fetch-tags: true) ensures all tags are present.
-          commit=$(git rev-list -n 1 "${{ steps.prep.outputs.tag }}")
-          if [ -z "$commit" ]; then
-            echo "Could not resolve commit SHA for ${{ steps.prep.outputs.tag }}"
-            exit 1
-          fi
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          node "${GITHUB_WORKSPACE}/flatpak/generate-node-sources.mjs" \
+            /tmp/mini-diarium-release/package-lock.json \
+            /tmp/mini-diarium-release/flatpak/node-sources.json \
+            "$HOME/.npm"
 
       - name: Rewrite manifest for Flathub repo layout
         env:
           COMMIT: ${{ steps.sha.outputs.commit }}
-        run: python3 flatpak/rewrite-manifest.py
+        working-directory: /tmp/mini-diarium-release
+        run: python3 "${GITHUB_WORKSPACE}/flatpak/rewrite-manifest.py"
 
       - name: Clone Flathub repository
         env:
@@ -106,9 +135,9 @@ jobs:
 
       - name: Copy files into Flathub repo
         run: |
-          cp flatpak/io.github.fjrevoredo.mini-diarium.yml /tmp/flathub-repo/io.github.fjrevoredo.mini-diarium.yml
-          cp flatpak/cargo-sources.json                    /tmp/flathub-repo/cargo-sources.json
-          cp flatpak/node-sources.json                     /tmp/flathub-repo/node-sources.json
+          cp /tmp/mini-diarium-release/flatpak/io.github.fjrevoredo.mini-diarium.yml /tmp/flathub-repo/io.github.fjrevoredo.mini-diarium.yml
+          cp /tmp/mini-diarium-release/flatpak/cargo-sources.json                    /tmp/flathub-repo/cargo-sources.json
+          cp /tmp/mini-diarium-release/flatpak/node-sources.json                     /tmp/flathub-repo/node-sources.json
 
       - name: Commit and open PR against Flathub repo
         env:
